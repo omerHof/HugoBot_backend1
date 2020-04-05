@@ -7,7 +7,7 @@ import datetime
 from functools import wraps
 
 
-app = Flask(_name_)
+app = Flask(__name__)
 app.config['SECRET_KEY'] = '5791628bb0b13ce0c676dfde280ba245'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 db = SQLAlchemy(app)
@@ -19,7 +19,7 @@ class Users(db.Model):
     FName = db.Column(db.String(50), nullable=False)
     LName = db.Column(db.String(50), nullable=False)
 
-    def _init_(self, Email, Nickname, Password, Fname, LName):
+    def __init__(self, Email, Nickname, Password, Fname, LName):
         self.Email = Email
         self.Nickname = Nickname
         self.Password = Password
@@ -105,5 +105,5 @@ def about():
     return "<h1>About Page</h1>"
 
 
-if _name_ == '_main_':
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80, threaded=True)
