@@ -157,7 +157,7 @@ def get_all_datasets():
     #while(x<4317777):
      #   print(x)
       #  x=x+1
-    #user = Users.query.filter_by(Email="2").first()
+    user = Users.query.filter_by(Email="2").first()
     #dataset1 = info_about_datasets(Name='data1', Description='ehtyhtyr', Rel_Path='hjswcwelk', public_private='public', category='sports', size=8.54, views=0, downloads=0, owner=user)
     #dataset2 = info_about_datasets(Name='data2', Description='ehtyhtyr', Rel_Path='hjswcwelk', public_private='public', category='sports', size=8.54, views=0, downloads=0, owner=user)
     #dataset3 = info_about_datasets(Name='data3', Description='ehtyhtyr', Rel_Path='hjswcwelk',public_private='public',category='sports', size=8.54, views=0, downloads=0, owner=user)
@@ -165,15 +165,15 @@ def get_all_datasets():
     #db.session.add(dataset2)
     #db.session.add(dataset3)
     #db.session.commit()
-    #dataset1= info_about_datasets.query.filter_by(Name="data1").first()
-    #dataset2 = info_about_datasets.query.filter_by(Name="data2").first()
-    #print(dataset1)
-    #print(dataset2)
-    #data1 = Permissions(owner=user, dataset=dataset1)
-    #data2 = Permissions(owner=user, dataset=dataset2)
-    #db.session.add(data1)
-    #db.session.add(data2)
-    #db.session.commit()
+    dataset1= info_about_datasets.query.filter_by(Name="data1").first()
+    dataset2 = info_about_datasets.query.filter_by(Name="data2").first()
+    print(dataset1)
+    print(dataset2)
+    data1 = Permissions(owner=user, dataset=dataset1)
+    data2 = Permissions(owner=user, dataset=dataset2)
+    db.session.add(data1)
+    db.session.add(data2)
+    db.session.commit()
 
     try:
         datasets= info_about_datasets.query.all()
@@ -236,7 +236,6 @@ def login():
     except:
         db.session.close()
         return jsonify({'message': 'problem with data'}), 400
-    #h
 
 
 @app.route("/")
