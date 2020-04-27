@@ -11,6 +11,9 @@ import uuid
 import time
 import json
 import os
+import csv
+from werkzeug.utils import secure_filename
+import zipfile
 
 
 
@@ -61,17 +64,23 @@ class ask_permissions(db.Model):
 
 class discretization(db.Model):
     id = db.Column(db.String(150), primary_key=True)
+    PAA = db.Column(db.Integer, nullable=False)
+    AbMethod = db.Column(db.String(25), nullable=False)
+    NumStates = db.Column(db.Integer, nullable=False)
+    InterpolationGap = db.Column(db.Integer, nullable=False)
+    KnowledgeBasedFile_name = db.Column(db.String(120))
+    GradientFile_name = db.Column(db.String(120))
     karma_lego = db.relationship('karma_lego', backref='discretization', lazy='subquery')
     dataset_Name = db.Column(db.String(150), db.ForeignKey('info_about_datasets.Name'), nullable=False)
 
 class karma_lego(db.Model):
     id= db.Column(db.String(150), primary_key= True)
     epsilon= db.Column(db.Float)
-    min_ver_support = db.Column(db.Float)
-    num_relations = db.Column(db.Integer)
-    max_gap = db.Column(db.Integer)
-    max_tirp_length = db.Column(db.Integer)
-    index_same = db.Column(db.Boolean)
+    min_ver_support = db.Column(db.Float, nullable=False)
+    num_relations = db.Column(db.Integer, nullable=False)
+    max_gap = db.Column(db.Integer, nullable=False)
+    max_tirp_length = db.Column(db.Integer, nullable=False)
+    index_same = db.Column(db.Boolean, nullable=False)
     discretization_name = db.Column(db.String(150), db.ForeignKey('discretization.id'), nullable=False)
 
 #this function checks if the user is connected by checking the token
@@ -199,8 +208,6 @@ def get_all_datasets():
     #db.session.add(data2)
     #db.session.commit()
 
-
-
     try:
         datasets= info_about_datasets.query.all()
         to_return= {}
@@ -223,11 +230,73 @@ def check_exists(disc, epsilon, max_gap, verticale_support, num_relations, index
         return False
     return True
 
+def check_if_already_exists(dataset, PAA, AbMethod, NumStates, InterpolationGap, GradientFile_name ,KnowledgeBasedFile_name):
+    exists= discretization.query.filter_by(dataset= dataset, PAA= PAA, AbMethod = AbMethod, NumStates= NumStates,InterpolationGap= InterpolationGap,
+                                           GradientFile_name= GradientFile_name,KnowledgeBasedFile_name = KnowledgeBasedFile_name).first()
+    if (exists == None):
+        return False
+    return True
 
 def get_dataset_name(disc):
     dataset = disc.dataset
     dataset_name = dataset.Name
     return dataset_name
+
+def create_directory_disc(dataset_name, discretization_id):
+    path = dataset_name + "/" + discretization_id
+    try:
+        os.mkdir(path)
+    except OSError:
+        print("Creation of the directory %s failed" % path)
+    else:
+        print("Successfully created the directory %s " % path)
+    return path
+
+def unzip(from_path,to_path, file_name):
+    with zipfile.ZipFile(from_path+'/' +file_name, 'r') as zip_ref:
+        zip_ref.extractall(to_path)
+
+def delete_not_necesery(directory_path):
+    for filename in os.listdir(directory_path):
+        if filename.endswith(".txt"):
+            continue
+        else:
+            os.remove(filename)
+
+@app.route('/addNewDisc', methods=['POST'])
+def add_new_disc():
+    data = request.form
+    PAA = int(data['PAA'])
+    AbMethod = str(data['AbMethod'])
+    NumStates = int(data['NumStates'])
+    InterpolationGap = int(data['InterpolationGap'])
+    dataset_name = str(data["datasetName"])
+
+    if 'GradientFile' not in data:
+        GradientFile = request.files["GradientFile"]
+        GradientFile.save(os.path.join('C:/Users/yonatan/PycharmProjects/HugoBotServer', secure_filename(GradientFile.filename)))
+        GradientFile_name = GradientFile.filename
+    else:
+        GradientFile_name = None
+    if 'KnowledgeBasedFile' not in data:
+        KnowledgeBasedFile = request.files["KnowledgeBasedFile"]
+        KnowledgeBasedFile.save(os.path.join('C:/Users/yonatan/PycharmProjects/HugoBotServer', secure_filename(KnowledgeBasedFile.filename)))
+        KnowledgeBasedFile_name = KnowledgeBasedFile.filename
+    else:
+        KnowledgeBasedFile_name = None
+    dataset1 = info_about_datasets.query.filter_by(Name=dataset_name).first()
+    if check_if_already_exists(dataset1, PAA, AbMethod, NumStates, InterpolationGap, GradientFile_name ,KnowledgeBasedFile_name):
+        return jsonify({'message': 'already exists!'}), 400
+    disc_id = str(uuid.uuid4())
+    disc = discretization(id= disc_id, dataset= dataset1, PAA= PAA, AbMethod = AbMethod, NumStates= NumStates,
+                                    InterpolationGap= InterpolationGap, GradientFile_name= GradientFile_name,KnowledgeBasedFile_name = KnowledgeBasedFile_name)
+    db.session.add(disc)
+    db.session.commit()
+    create_directory_disc(dataset_name, disc_id)
+    #with zipfile.ZipFile('somePath/bla2.zip', 'r') as zip_ref:
+    #    zip_ref.extractall('C:/Users/yonatan/PycharmProjects/HugoBotServer')
+
+
 
 def create_directory(dataset_name, discretization_id, KL_id):
     path = dataset_name + "/" + discretization_id + "/" + KL_id
@@ -238,6 +307,8 @@ def create_directory(dataset_name, discretization_id, KL_id):
     else:
         print("Successfully created the directory %s " % path)
     return path
+
+
 @app.route('/addTIM', methods=['POST'])
 def add_TIM():
     data = request.get_json()
