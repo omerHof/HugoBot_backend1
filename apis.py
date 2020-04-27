@@ -5,7 +5,14 @@ import jwt
 import datetime
 from functools import wraps
 from flask_cors import CORS
+from KarmaLego_Framework import RunKarmaLego
+import data1
+import uuid
+import time
 import json
+import os
+
+
 
 
 app = Flask(__name__)
@@ -40,6 +47,7 @@ class info_about_datasets(db.Model):
     Email = db.Column(db.String(30), db.ForeignKey('users.Email'), nullable=False)
     Permissions = db.relationship('Permissions', backref='dataset', lazy='subquery')
     ask_permissions = db.relationship('ask_permissions', backref='dataset', lazy='subquery')
+    discretization = db.relationship('discretization', backref='dataset', lazy='subquery')
 
 #table than handles the permissions
 class Permissions(db.Model):
@@ -51,7 +59,20 @@ class ask_permissions(db.Model):
     Email = db.Column(db.String(30), db.ForeignKey('users.Email'), primary_key=True)
     name_of_dataset = db.Column(db.String(50),db.ForeignKey('info_about_datasets.Name'), primary_key=True)
 
+class discretization(db.Model):
+    id = db.Column(db.String(150), primary_key=True)
+    karma_lego = db.relationship('karma_lego', backref='discretization', lazy='subquery')
+    dataset_Name = db.Column(db.String(150), db.ForeignKey('info_about_datasets.Name'), nullable=False)
 
+class karma_lego(db.Model):
+    id= db.Column(db.String(150), primary_key= True)
+    epsilon= db.Column(db.Float)
+    min_ver_support = db.Column(db.Float)
+    num_relations = db.Column(db.Integer)
+    max_gap = db.Column(db.Integer)
+    max_tirp_length = db.Column(db.Integer)
+    index_same = db.Column(db.Boolean)
+    discretization_name = db.Column(db.String(150), db.ForeignKey('discretization.id'), nullable=False)
 
 #this function checks if the user is connected by checking the token
 def token_required(f):
@@ -157,7 +178,7 @@ def get_all_datasets():
     #while(x<4317777):
      #   print(x)
       #  x=x+1
-    user = Users.query.filter_by(Email="2").first()
+    #user = Users.query.filter_by(Email="2").first()
     #dataset1 = info_about_datasets(Name='data1', Description='ehtyhtyr', Rel_Path='hjswcwelk', public_private='public', category='sports', size=8.54, views=0, downloads=0, owner=user)
     #dataset2 = info_about_datasets(Name='data2', Description='ehtyhtyr', Rel_Path='hjswcwelk', public_private='public', category='sports', size=8.54, views=0, downloads=0, owner=user)
     #dataset3 = info_about_datasets(Name='data3', Description='ehtyhtyr', Rel_Path='hjswcwelk',public_private='public',category='sports', size=8.54, views=0, downloads=0, owner=user)
@@ -165,15 +186,20 @@ def get_all_datasets():
     #db.session.add(dataset2)
     #db.session.add(dataset3)
     #db.session.commit()
-    dataset1= info_about_datasets.query.filter_by(Name="data1").first()
-    dataset2 = info_about_datasets.query.filter_by(Name="data2").first()
-    print(dataset1)
-    print(dataset2)
-    data1 = Permissions(owner=user, dataset=dataset1)
-    data2 = Permissions(owner=user, dataset=dataset2)
-    db.session.add(data1)
-    db.session.add(data2)
-    db.session.commit()
+    #dataset1= info_about_datasets.query.filter_by(Name="data1").first()
+    #disc= discretization(id='1234', dataset=dataset1)
+    #db.session.add(disc)
+    #db.session.commit()
+    #dataset2 = info_about_datasets.query.filter_by(Name="data2").first()
+    #print(dataset1)
+    #print(dataset2)
+    #data1 = Permissions(owner=user, dataset=dataset1)
+    #data2 = Permissions(owner=user, dataset=dataset2)
+    #db.session.add(data1)
+    #db.session.add(data2)
+    #db.session.commit()
+
+
 
     try:
         datasets= info_about_datasets.query.all()
@@ -189,6 +215,88 @@ def get_all_datasets():
     except:
         db.session.close()
         return jsonify({'message': 'there has been an eror!'}), 500
+
+def check_exists(disc, epsilon, max_gap, verticale_support, num_relations, index_same, max_tirp_length):
+    exists = karma_lego.query.filter_by(epsilon= epsilon, min_ver_support= verticale_support, num_relations= num_relations,
+                               max_gap= max_gap, max_tirp_length= max_tirp_length, index_same= index_same, discretization= disc).first()
+    if(exists==None):
+        return False
+    return True
+
+
+def get_dataset_name(disc):
+    dataset = disc.dataset
+    dataset_name = dataset.Name
+    return dataset_name
+
+def create_directory(dataset_name, discretization_id, KL_id):
+    path = dataset_name + "/" + discretization_id + "/" + KL_id
+    try:
+        os.mkdir(path)
+    except OSError:
+        print("Creation of the directory %s failed" % path)
+    else:
+        print("Successfully created the directory %s " % path)
+    return path
+@app.route('/addTIM', methods=['POST'])
+def add_TIM():
+    data = request.get_json()
+    discretization_id = str(data['DiscretizationId'])
+    if 'Epsilon' not in data:
+        epsilon = float(0.0000)
+    else:
+        epsilon = float(data['Epsilon'])
+    max_gap = int(data['Max Gap'])
+    verticale_support = float(data['min_ver_support'])
+    num_relations = int(data['num_relations'])
+    max_tirp_length = int(data['max Tirp Length'])
+    index_same = str(data['index_same'])
+    if (index_same =='true'):
+        index_same=True
+    else:
+        index_same=False
+    disc = discretization.query.filter_by(id=discretization_id).first()
+    if(check_exists(disc, epsilon, max_gap, verticale_support, num_relations, index_same, max_tirp_length)):
+        return jsonify({'message': 'already exists!'}), 400
+    dataset_name = get_dataset_name(disc)
+    KL_id = str(uuid.uuid4())
+    KL= karma_lego(id=KL_id, epsilon= epsilon, min_ver_support= verticale_support, num_relations= num_relations,
+                   max_gap= max_gap, max_tirp_length= max_tirp_length, index_same= index_same,discretization= disc)
+    db.session.add(KL)
+    db.session.commit()
+    create_directory(dataset_name, discretization_id, KL_id)
+    directory_path = dataset_name + "/" + discretization_id
+    for filename in os.listdir(directory_path):
+        if filename.endswith(".txt"):
+            start_time = time.time()
+            print(time.time() - start_time)
+            support_vec = verticale_support
+            num_relations = num_relations
+            max_gap = max_gap
+            epsilon= epsilon
+            max_tirp_length= max_tirp_length
+            path = 'C:/Users/yonatan/PycharmProjects/HugoBotServer/' + directory_path + '/' + filename
+            print(filename)
+            out_path = 'C:/Users/yonatan/PycharmProjects/HugoBotServer/' + directory_path + '/' + KL_id + '/' + filename
+            print_output_incrementally = True
+            entity_ids_num = 2
+            index_same = index_same
+            semicolon_end = True
+            need_one_sized = True
+            lego_0, karma_0 = RunKarmaLego.runKarmaLego(time_intervals_path=path, output_path=out_path, index_same=index_same,epsilon=epsilon,
+                                           incremental_output=print_output_incrementally, min_ver_support=support_vec,
+                                           num_relations=num_relations, skip_followers=False, max_gap=max_gap, label=0,
+                                           max_tirp_length=max_tirp_length, num_comma=2, entity_ids_num=entity_ids_num,
+                                           semicolon_end=semicolon_end, need_one_sized=need_one_sized)
+            print("hello")
+            if not print_output_incrementally:
+                lego_0.print_frequent_tirps(out_path)
+            total_time = time.time() - start_time
+            print(total_time)
+        else:
+            continue
+    return "hello"
+
 
 #post reqeust that gets a json with 'Email',
 #'Nickname'(optional), 'Password', 'Lname', 'Fname'
