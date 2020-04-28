@@ -308,10 +308,47 @@ def create_directory(dataset_name, discretization_id, KL_id):
         print("Successfully created the directory %s " % path)
     return path
 
+def check_for_bad_user(KL,user_id):
+    if(KL.discretization.dataset.owner.Email==user_id):
+        return False
+    else:
+        return True
+
+def check_for_bad_user_disc(disc,user_id):
+    if(disc.dataset.owner.Email==user_id):
+        return False
+    else:
+        return True
+
+@app.route('/getTIM', methods=['POST'])
+@token_required
+def get_TIM(current_user):
+    data = request.get_json()
+    kl_id= data["kl_id"]
+    class_num = data["class_num"]
+    KL = karma_lego.query.filter_by(id=kl_id).first()
+    if(check_for_bad_user(KL,current_user.Email)):
+        return jsonify({'message': 'dont try to fool me, you dont own it!'}), 400
+    disc= KL.discretization.id
+    dataset= KL.discretization.dataset.Name
+    return send_file(dataset+'/'+disc+'/'+kl_id+'/'+class_num)
+
+@app.route('/getDISC', methods=['POST'])
+@token_required
+def get_DISC(current_user):
+    data = request.get_json()
+    disc_id= data["disc_id"]
+    class_num = data["class_num"]
+    disc = discretization.query.filter_by(id=disc_id).first()
+    if(check_for_bad_user_disc(disc,current_user.Email)):
+        return jsonify({'message': 'dont try to fool me, you dont own it!'}), 400
+    dataset= disc.dataset.Name
+    return send_file(dataset+'/'+disc_id+'/'+class_num)
+
 
 @app.route('/addTIM', methods=['POST'])
 def add_TIM():
-    data = request.get_json()
+    data = request.form
     discretization_id = str(data['DiscretizationId'])
     if 'Epsilon' not in data:
         epsilon = float(0.0000)
