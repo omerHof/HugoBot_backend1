@@ -27,7 +27,8 @@ db = SQLAlchemy(app)
 #this users table
 class Users(db.Model):
     Email = db.Column(db.String(80), primary_key=True)
-    Nickname = db.Column(db.String(50))
+    institute = db.Column(db.String(50), nullable=False)
+    degree = db.Column(db.String(10), nullable=False)
     Password = db.Column(db.String(80), nullable=False)
     FName = db.Column(db.String(50), nullable=False)
     LName = db.Column(db.String(50), nullable=False)
@@ -411,15 +412,14 @@ def add_TIM():
 @app.route('/register', methods=['POST'])
 def create_user():
     try:
-        data = request.get_json()
-        if 'Nickname' not in data:
-            data['Nickname']= None
+        data = request.form
         doble_user = Users.query.filter_by(Email=data['Email']).first()
         if doble_user:
             db.session.close()
+            print("hello")
             return jsonify({'message': 'there is already a user with that Email'}), 400
         hashed_password = generate_password_hash(data['Password'], method='sha256')
-        new_user = Users(Email=data['Email'], Nickname=data['Nickname'], Password=hashed_password, LName=data['Lname'],
+        new_user = Users(Email=data['Email'], institute= data["Institute"], degree=data["Degree"], Password=hashed_password, LName=data['Lname'],
                          FName=data['Fname'])
         db.session.add(new_user)
         db.session.commit()
@@ -430,18 +430,18 @@ def create_user():
     db.session.close()
     return jsonify({'message' : 'New user created!'})
 
-#gets 'Email' and 'Password' and gives back a token than you should
+#gets 'Email' and 'Password' and gives back a token than you should.
 #send with key value like x-access-token in the header
 @app.route('/login', methods=['POST'])
 def login():
     try:
-        data = request.get_json()
+        data = request.form
         if 'Email' not in data or 'Password' not in data:
             return make_response('you didnt give me Email or Password', 400)
         user = Users.query.filter_by(Email=data['Email']).first()
         if not user:
             db.session.close()
-            return make_response('user or password is not correct', 400)
+            return make_response( {'message': 'user or password is not correct'} , 400)
         if check_password_hash(user.Password, data['Password']):
             token = jwt.encode({'Email': user.Email, 'exp': (datetime.datetime.utcnow() + datetime.timedelta(minutes=3000))},app.config['SECRET_KEY'], algorithm='HS256')
             db.session.close()
