@@ -319,7 +319,7 @@ def add_new_disc():
         return jsonify({'message': 'already exists!'}), 400
     disc_id = str(uuid.uuid4())
     print("hello")
-    disc = discretization(binning= binning, id= disc_id, dataset= dataset1, PAA= PAA, AbMethod = AbMethod, NumStates= NumStates,
+    disc = discretization(binning_by_value= binning, id= disc_id, dataset= dataset1, PAA= PAA, AbMethod = AbMethod, NumStates= NumStates,
                                     InterpolationGap= InterpolationGap, GradientFile_name= GradientFile_name,KnowledgeBasedFile_name = KnowledgeBasedFile_name)
     db.session.add(disc)
     db.session.commit()
