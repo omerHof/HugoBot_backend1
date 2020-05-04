@@ -71,6 +71,7 @@ class discretization(db.Model):
     InterpolationGap = db.Column(db.Integer, nullable=False)
     KnowledgeBasedFile_name = db.Column(db.String(120))
     GradientFile_name = db.Column(db.String(120))
+    binning_by_value = db.Column(db.Boolean, nullable=False)
     karma_lego = db.relationship('karma_lego', backref='discretization', lazy='subquery')
     dataset_Name = db.Column(db.String(150), db.ForeignKey('info_about_datasets.Name'), nullable=False)
 
@@ -181,6 +182,8 @@ def accept_permission(current_user):
     except:
         return jsonify({'message': 'there has been an eror!'}), 500
 
+
+
 #sends all the info about the data sets
 @app.route('/getAllDataSets', methods=['GET'])
 def get_all_datasets():
@@ -263,16 +266,42 @@ def delete_not_necesery(directory_path):
             continue
         else:
             os.remove(filename)
+"""
+@app.route('/getDataOnDataset', methods=['GET'])
+def get_data_on_dataSet():
+    try:
+        dataset_name= request.args.get("id")
+        discretizations = discretization.filterby(dataset= dataset_name).all()
+        part_to_return= {}
+        x=0
+        part_to_return["lengthNum"]= len(part_to_return)
+        for curr_disc in part_to_return:
+            full_name= curr_disc.owner.FName + " " + curr_disc.owner.LName
+            part_to_return[str(x)]= {"MethodOfDiscretization": curr_disc.Name, "BinsNumber": str(curr_disc.size) ,"InterpolationGap": full_name, "PAAWindowSize": curr_disc.category, "PublicPrivate": curr_disc.public_private}
+            x=x+1
+        db.session.close()
+        return jsonify(to_return)
+    except:
+        db.session.close()
+        return jsonify({'message': 'there has been an eror!'}), 500
+"""
+
 
 @app.route('/addNewDisc', methods=['POST'])
 def add_new_disc():
-    data = request.form
+    data = request.get_json()
+    print("hello")
     PAA = int(data['PAA'])
     AbMethod = str(data['AbMethod'])
     NumStates = int(data['NumStates'])
     InterpolationGap = int(data['InterpolationGap'])
     dataset_name = str(data["datasetName"])
-
+    binning = data["BinningByValue"]
+    if (binning =='true'):
+        binning=True
+    else:
+        binning=False
+    print("hello")
     if 'GradientFile' not in data:
         GradientFile = request.files["GradientFile"]
         GradientFile.save(os.path.join('C:/Users/yonatan/PycharmProjects/HugoBotServer', secure_filename(GradientFile.filename)))
@@ -289,13 +318,15 @@ def add_new_disc():
     if check_if_already_exists(dataset1, PAA, AbMethod, NumStates, InterpolationGap, GradientFile_name ,KnowledgeBasedFile_name):
         return jsonify({'message': 'already exists!'}), 400
     disc_id = str(uuid.uuid4())
-    disc = discretization(id= disc_id, dataset= dataset1, PAA= PAA, AbMethod = AbMethod, NumStates= NumStates,
+    print("hello")
+    disc = discretization(binning= binning, id= disc_id, dataset= dataset1, PAA= PAA, AbMethod = AbMethod, NumStates= NumStates,
                                     InterpolationGap= InterpolationGap, GradientFile_name= GradientFile_name,KnowledgeBasedFile_name = KnowledgeBasedFile_name)
     db.session.add(disc)
     db.session.commit()
     create_directory_disc(dataset_name, disc_id)
     #with zipfile.ZipFile('somePath/bla2.zip', 'r') as zip_ref:
     #    zip_ref.extractall('C:/Users/yonatan/PycharmProjects/HugoBotServer')
+    return "hello"
 
 
 
