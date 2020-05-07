@@ -401,6 +401,16 @@ def add_new_disc():
     return "hello"
 
 
+def create_directory_for_dataset(dataset_name):
+    try:
+        os.mkdir(dataset_name)
+    except OSError:
+        print("Creation of the directory %s failed" % dataset_name)
+    else:
+        print("Successfully created the directory %s " % dataset_name)
+    return dataset_name
+
+
 def create_directory(dataset_name, discretization_id, KL_id):
     path = dataset_name + "/" + discretization_id + "/" + KL_id
     try:
@@ -629,19 +639,50 @@ def run_hugobot(config):
 @app.route("/stepone", methods=["POST"])
 def upload_stepone():
     try:
+        # Extract user input from the form:
         dataset_name = request.form['datasetName']
-        print(dataset_name)
         category = request.form['category']
-        print(category)
         public_private = request.form['publicPrivate']
-        print(public_private)
-        # file = request.files['file']
-        file = request.form['file']
-        print(file)
+        raw_data_file = request.files['file']
         description = request.form['description']
-        print(description)
         dataset_source = request.form['datasetSource']
+
+        # Echo it in the server (sanity check)
+        print(dataset_name)
+        print(category)
+        print(public_private)
+        print(raw_data_file)
+        print(description)
         print(dataset_source)
+
+        # Dataset File: user input
+
+        # Validate dataset file integrity
+
+        # Save the dataset file
+        create_directory_for_dataset(dataset_name)
+        raw_data_file.save(os.path.join('C:/Users/Raz/PycharmProjects/HugoBotServer',
+                                        dataset_name,
+                                        secure_filename(raw_data_file.filename)))
+
+        # Now, save the info as a tuple in the DB and the file as part of the file system:
+        # info_about_datasets tuple:
+        # Name (PK), Pub_date, Description, Rel_path, Public/private, Category, Size, Views, Downloads, Email
+        # Name: user input
+        # Pub_date: generated (get current time)
+        # Description: user input
+        # Rel_path: generated (using user input - the name of the directory is the dataset name)
+        # Public/private: user input
+        # Category: user input
+        # Size: generated (calculated from file)
+        size = os.path.getsize(os.path.join('C:/Users/Raz/PycharmProjects/HugoBotServer',
+                                            dataset_name,
+                                            raw_data_file.filename))
+        # Views: generated (instantiated to 0)
+        views = 0
+        # Downloads: generated (instantiated to 0)
+        downloads = 0
+        # Email: user input (identifier of the user)
     except:
         db.session.rollback()
         db.session.close()
@@ -689,6 +730,27 @@ def upload_stepthree():
         return jsonify({'message': 'problem with data'}), 400
     db.session.close()
     return jsonify({'message': 'Entity File Successfully Uploaded!'})
+
+
+@app.route("/getInfo", methods=["GET"])
+def get_all_info_on_dataset():
+    dataset_name = request.args.get("id")
+    print(dataset_name)
+    return jsonify({"Name": "data1",
+                    "category": "medical",
+                    "owner_name": "raz shtrauchler",
+                    "source": "raz himself",
+                    "Description": "a fitting description",
+                    "size": "2.432 MB",
+                    "views": "34",
+                    "downloads": "3"}), 200
+
+
+@app.route("/getVMapFile", methods=["GET"])
+def get_vmap_file():
+    dataset_name = request.args.get("id")
+    print(dataset_name)
+    return send_file(dataset_name + '/' + 'VMap.csv'), 200
 
 
 if __name__ == '__main__':
