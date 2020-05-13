@@ -129,10 +129,10 @@ def token_required(f):
     return decorated
 
 
-def checkForOthorization(current_user, dataset_name):
+def check_for_authorization(current_user, dataset_name):
     per = Permissions.query.filter_by(name_of_dataset=dataset_name).first()
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
-    if ((per==None or current_user.Email != per.owner.Email )and (dataset.owner.Email != current_user.Email)):
+    if (per is None or current_user.Email != per.owner.Email) and (dataset.owner.Email != current_user.Email):
         return True
     else:
         return False
@@ -144,7 +144,7 @@ def get_data_on_dataset(current_user):
     try:
         dataset_name = request.args.get("id")
         print(current_user)
-        if (checkForOthorization(current_user, dataset_name)):
+        if check_for_authorization(current_user, dataset_name):
             return jsonify({'message': 'dont try to fool me, you dont own it!'}), 403
         discretizations = discretization.query.filter_by(dataset_Name=dataset_name).all()
         disc_to_return = {}
@@ -155,7 +155,7 @@ def get_data_on_dataset(current_user):
         for curr_disc in discretizations:
             karma_arr.append(karma_lego.query.filter_by(discretization=curr_disc).all())
             num = num + len(karma_arr[x])
-            if curr_disc.binning_by_value == True:
+            if curr_disc.binning_by_value:
                 bin = "true"
             else:
                 bin = "false"
@@ -312,34 +312,6 @@ def accept_permission(current_user):
 # sends all the info about the data sets
 @app.route('/getAllDataSets', methods=['GET'])
 def get_all_datasets():
-    # x=0
-    # while(x<4317777):
-    #   print(x)
-    #  x=x+1
-    # user = Users.query.filter_by(Email="2").first()
-    # dataset1 = info_about_datasets(Name='data1', Description='ehtyhtyr',
-    # Rel_Path='hjswcwelk', public_private='public', category='sports', size=8.54, views=0, downloads=0, owner=user)
-    # dataset2 = info_about_datasets(Name='data2', Description='ehtyhtyr',
-    # Rel_Path='hjswcwelk', public_private='public', category='sports', size=8.54, views=0, downloads=0, owner=user)
-    # dataset3 = info_about_datasets(Name='data3', Description='ehtyhtyr',
-    # Rel_Path='hjswcwelk',public_private='public',category='sports', size=8.54, views=0, downloads=0, owner=user)
-    # db.session.add(dataset1)
-    # db.session.add(dataset2)
-    # db.session.add(dataset3)
-    # db.session.commit()
-    # dataset1= info_about_datasets.query.filter_by(Name="data1").first()
-    # disc= discretization(id='1234', dataset=dataset1)
-    # db.session.add(disc)
-    # db.session.commit()
-    # dataset2 = info_about_datasets.query.filter_by(Name="data2").first()
-    # print(dataset1)
-    # print(dataset2)
-    # data1 = Permissions(owner=user, dataset=dataset1)
-    # data2 = Permissions(owner=user, dataset=dataset2)
-    # db.session.add(data1)
-    # db.session.add(data2)
-    # db.session.commit()
-
     try:
         datasets = info_about_datasets.query.all()
         to_return = {}
@@ -399,7 +371,7 @@ def unzip(from_path, to_path, file_name):
         zip_ref.extractall(to_path)
 
 
-def delete_not_necesery(directory_path):
+def delete_not_necessary(directory_path):
     for filename in os.listdir(directory_path):
         if filename.endswith(".txt"):
             continue
@@ -411,7 +383,6 @@ def delete_not_necesery(directory_path):
 @token_required
 def add_new_disc(current_user):
     data = request.form
-    print("hello")
     PAA = int(data['PAA'])
     AbMethod = str(data['AbMethod'])
     NumStates = int(data['NumStates'])
@@ -422,21 +393,17 @@ def add_new_disc(current_user):
         binning = True
     else:
         binning = False
-    print("hello")
+
     if 'GradientFile' not in data:
         GradientFile = request.files["GradientFile"]
         GradientFile.save(
-            # os.path.join('C:/Users/yonatan/PycharmProjects/HugoBotServer', secure_filename(GradientFile.filename)))
-            os.path.join('C:/Users/Raz/PycharmProjects/HugoBotServer', secure_filename(GradientFile.filename)))
+            os.path.join(SERVER_ROOT, secure_filename(GradientFile.filename)))
         GradientFile_name = GradientFile.filename
     else:
         GradientFile_name = None
     if 'KnowledgeBasedFile' not in data:
         KnowledgeBasedFile = request.files["KnowledgeBasedFile"]
-        # KnowledgeBasedFile.save(os.path.join('C:/Users/yonatan/PycharmProjects/HugoBotServer',
-        #                                      secure_filename(KnowledgeBasedFile.filename)))
-        KnowledgeBasedFile.save(os.path.join('C:/Users/Raz/PycharmProjects/HugoBotServer',
-                                             secure_filename(KnowledgeBasedFile.filename)))
+        KnowledgeBasedFile.save(os.path.join(SERVER_ROOT,secure_filename(KnowledgeBasedFile.filename)))
         KnowledgeBasedFile_name = KnowledgeBasedFile.filename
     else:
         KnowledgeBasedFile_name = None
@@ -547,12 +514,12 @@ def get_TIM():
         kl_id = data["kl_id"]
         class_num = data["class_num"]
         KL = karma_lego.query.filter_by(id=kl_id).first()
-        #if (check_for_bad_user(KL, current_user.Email)):
-         #  return jsonify({'message': 'dont try to fool me, you dont own it!'}), 403
+        # if (check_for_bad_user(KL, current_user.Email)):
+        #  return jsonify({'message': 'dont try to fool me, you dont own it!'}), 403
         disc = KL.discretization.id
         dataset = KL.discretization.dataset.Name
         db.session.close()
-        return send_file("C:/Users/Raz/PycharmProjects/HugoBotServer/" + dataset + '/' + disc + '/' + kl_id + '/' + class_num)
+        return send_file(SERVER_ROOT + "/" + dataset + '/' + disc + '/' + kl_id + '/' + class_num)
     except:
         db.session.close()
         return jsonify({'message': 'there is no such file to download'}), 404
@@ -592,21 +559,21 @@ def add_TIM():
         num_relations = int(data['num_relations'])
         max_tirp_length = int(data['max Tirp Length'])
         index_same = str(data['index_same'])
-        if (index_same == 'true'):
+        if index_same == 'true':
             index_same = True
         else:
             index_same = False
         print(index_same)
-        print (epsilon)
+        print(epsilon)
         disc = discretization.query.filter_by(id=discretization_id).first()
-        email= disc.dataset.owner.Email
-        if (check_exists(disc, epsilon, max_gap, verticale_support, num_relations, index_same, max_tirp_length)):
+        email = disc.dataset.owner.Email
+        if check_exists(disc, epsilon, max_gap, verticale_support, num_relations, index_same, max_tirp_length):
             return jsonify({'message': 'already exists!'}), 409
         dataset_name = get_dataset_name(disc)
         KL_id = str(uuid.uuid4())
         create_directory(dataset_name, discretization_id, KL_id)
         directory_path = dataset_name + "/" + discretization_id
-        for filename in os.listdir('C:/Users/Raz/PycharmProjects/HugoBotServer/' + directory_path):
+        for filename in os.listdir(SERVER_ROOT + '/' + directory_path):
             if filename.endswith(".txt"):
                 start_time = time.time()
                 support_vec = verticale_support
@@ -614,8 +581,8 @@ def add_TIM():
                 max_gap = max_gap
                 epsilon = epsilon
                 max_tirp_length = max_tirp_length
-                path = 'C:/Users/Raz/PycharmProjects/HugoBotServer/' + directory_path + '/' + filename
-                out_path = 'C:/Users/Raz/PycharmProjects/HugoBotServer/' + directory_path + '/' + KL_id + '/' + filename
+                path = SERVER_ROOT + '/' + directory_path + '/' + filename
+                out_path = SERVER_ROOT + '/' + directory_path + '/' + KL_id + '/' + filename
                 print_output_incrementally = True
                 entity_ids_num = 2
                 index_same = index_same
@@ -643,7 +610,7 @@ def add_TIM():
         db.session.close()
         return jsonify({'message': 'problem with data'}), 404
     try:
-        notify_by_email.send_an_email(message=f"Subject: karmalego created succsesfuly", receiver_email=email)
+        notify_by_email.send_an_email(message=f"Subject: karmalego created successfully", receiver_email=email)
         return jsonify({'message': 'karmalego created!'}), 200
     except:
         return jsonify({'message': 'cant send an email!'}), 409
@@ -763,8 +730,7 @@ def upload_stepone(current_user):
     print(dataset_name)
     create_directory_for_dataset(dataset_name)
     raw_data_file.save(
-        os.path.join('C:/Users/Raz/PycharmProjects/HugoBotServer',
-                     dataset_name, secure_filename(raw_data_file.filename)))
+        os.path.join(SERVER_ROOT, dataset_name, secure_filename(raw_data_file.filename)))
 
     # rel_path=rel_path,
     # pub_date=pub_date,
@@ -791,8 +757,7 @@ def upload_steptwo(current_user):
         dataset_name = request.form['datasetName']
         print(dataset_name)
         file.save(
-            os.path.join('C:/Users/Raz/PycharmProjects/HugoBotServer',
-                         dataset_name, secure_filename(file.filename)))
+            os.path.join(SERVER_ROOT, dataset_name, secure_filename(file.filename)))
     except:
         db.session.rollback()
         db.session.close()
@@ -810,7 +775,7 @@ def step_two_create(current_user):
         print(file)
         dataset_name = request.form['datasetName']
         print(dataset_name)
-        # file.save(os.path.join('C:/Users/Raz/PycharmProjects/HugoBotServer',dataset_name, secure_filename(file.filename)))
+        # file.save(os.path.join(SERVER_ROOT,dataset_name, secure_filename(file.filename)))
     except:
         db.session.rollback()
         db.session.close()
@@ -828,8 +793,7 @@ def upload_stepthree(current_user):
         dataset_name = request.form['datasetName']
         print(dataset_name)
         file.save(
-            os.path.join('C:/Users/Raz/PycharmProjects/HugoBotServer',
-                         dataset_name, secure_filename(file.filename)))
+            os.path.join(SERVER_ROOT, dataset_name, secure_filename(file.filename)))
     except:
         db.session.rollback()
         db.session.close()
