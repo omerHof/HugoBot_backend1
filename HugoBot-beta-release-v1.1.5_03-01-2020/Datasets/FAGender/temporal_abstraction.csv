@@ -1,0 +1,6 @@
+TemporalPropertyID,Method,NbBins,GradientWindowSize
+39,td4c-cosine,4,
+39,sax,4,
+39,td4c-entropy,5,
+39,td4c-entropy-ig,2,
+39,gradient,3,5

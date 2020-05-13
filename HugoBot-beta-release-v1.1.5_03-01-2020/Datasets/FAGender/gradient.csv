@@ -1,0 +1,4 @@
+StateID,TemporalPropertyID,Method,BinID,BinLow,BinHigh
+1,39,gradient,0,-90,-10
+2,39,gradient,1,-10,10
+3,39,gradient,2,10,90
