@@ -156,22 +156,21 @@ def get_data_on_dataset(current_user):
             karma_arr.append(karma_lego.query.filter_by(discretization=curr_disc).all())
             num = num + len(karma_arr[x])
             if curr_disc.binning_by_value:
-                bin = "true"
+                binning = "true"
             else:
-                bin = "false"
+                binning = "false"
             disc_to_return[str(x)] = {"MethodOfDiscretization": str(curr_disc.AbMethod),
                                       "BinsNumber": str(curr_disc.NumStates),
                                       "InterpolationGap": str(curr_disc.InterpolationGap),
-                                      "PAAWindowSize": str(curr_disc.PAA), "BinningByValue": bin,
+                                      "PAAWindowSize": str(curr_disc.PAA), "BinningByValue": binning,
                                       "id": str(curr_disc.id)}
             x = x + 1
         x = 0
-        karma_to_return = {}
-        karma_to_return["lengthNum"] = num
+        karma_to_return = {"lengthNum": num}
 
         for karma in karma_arr:
             for curr_karma in karma:
-                if curr_karma.index_same == True:
+                if curr_karma.index_same:
                     i_s = "true"
                 else:
                     i_s = "false"
@@ -246,38 +245,46 @@ def load_mail(current_user):
     try:
         my_datasets = current_user.my_datasets
         to_return = {"myDatasets": {}, "myDatasetsLen": len(my_datasets)}
+        print(str(len(my_datasets)))
         x = 0
         for curr_dataset in my_datasets:
-            full_name = current_user.FName + " " + current_user.LName
+            # full_name = current_user.FName + " " + current_user.LName
+            curr_email = curr_dataset.Email
             to_return["myDatasets"][str(x)] = {"DatasetName": curr_dataset.Name, "Size": str(curr_dataset.size),
-                                               "Owner": full_name,
+                                               "Owner": curr_email,
                                                "Category": curr_dataset.category,
                                                "PublicPrivate": curr_dataset.public_private}
             x = x + 1
         users_permissions = Permissions.query.filter_by(Email=current_user.Email).all()
         to_return["myPermissions"] = {}
         to_return["myPermissionsLen"] = len(users_permissions)
+        print(str(len(users_permissions)))
         x = 0
         for curr_record in users_permissions:
             curr_dataset = curr_record.dataset
-            full_name = current_user.FName + " " + current_user.LName
+            curr_email = curr_dataset.Email
+            # full_name = current_user.FName + " " + current_user.LName
             to_return["myPermissions"][str(x)] = {"DatasetName": curr_dataset.Name, "Size": str(curr_dataset.size),
-                                                  "Owner": full_name,
+                                                  "Owner": curr_email,
                                                   "Category": curr_dataset.category,
                                                   "PublicPrivate": curr_dataset.public_private}
             x = x + 1
         users_ask_permissions = ask_permissions.query.filter_by(Email=current_user.Email).all()
         to_return["askPermissions"] = {}
         to_return["askPermissionsLen"] = len(users_ask_permissions)
+        print(str(len(users_ask_permissions)))
         x = 0
         for curr_record in users_ask_permissions:
             curr_dataset = curr_record.dataset
-            full_name = current_user.FName + " " + current_user.LName
+            curr_email = curr_dataset.Email
+            print(str(curr_email))
+            # full_name = current_user.FName + " " + current_user.LName
             to_return["askPermissions"][str(x)] = {"DatasetName": curr_dataset.Name, "Size": str(curr_dataset.size),
-                                                   "Owner": full_name,
+                                                   "Owner": curr_email,
                                                    "Category": curr_dataset.category,
                                                    "PublicPrivate": curr_dataset.public_private}
             x = x + 1
+        to_return['Email'] = current_user.Email
         db.session.close()
         return jsonify(to_return)
     except:
@@ -333,7 +340,7 @@ def check_exists(disc, epsilon, max_gap, verticale_support, num_relations, index
     exists = karma_lego.query.filter_by(epsilon=epsilon, min_ver_support=verticale_support, num_relations=num_relations,
                                         max_gap=max_gap, max_tirp_length=max_tirp_length, index_same=index_same,
                                         discretization=disc).first()
-    if (exists == None):
+    if exists is None:
         return False
     return True
 
@@ -344,7 +351,7 @@ def check_if_already_exists(dataset, paa, ab_method, num_states, interpolation_g
                                             InterpolationGap=interpolation_gap,
                                             GradientFile_name=gradient_file_name,
                                             KnowledgeBasedFile_name=knowledge_based_file_name).first()
-    if exists == None:
+    if exists is None:
         return False
     return True
 
@@ -403,7 +410,7 @@ def add_new_disc(current_user):
         GradientFile_name = None
     if 'KnowledgeBasedFile' not in data:
         KnowledgeBasedFile = request.files["KnowledgeBasedFile"]
-        KnowledgeBasedFile.save(os.path.join(SERVER_ROOT,secure_filename(KnowledgeBasedFile.filename)))
+        KnowledgeBasedFile.save(os.path.join(SERVER_ROOT, secure_filename(KnowledgeBasedFile.filename)))
         KnowledgeBasedFile_name = KnowledgeBasedFile.filename
     else:
         KnowledgeBasedFile_name = None
@@ -507,7 +514,7 @@ def check_for_bad_user_disc(disc, user_id):
 
 
 @app.route('/getTIM', methods=['POST'])
-#@token_required
+# @token_required
 def get_TIM():
     try:
         data = request.form
