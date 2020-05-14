@@ -552,17 +552,30 @@ def get_disc(current_user):
     return send_file(dataset + '/' + disc_id + '/states.csv')
 
 
+def check_if_not_int(num):
+    num1 = float(num)
+    if num1.is_integer() and num1>1:
+        return False
+    else:
+        return True
+
+
 @app.route('/addTIM', methods=['POST'])
 def add_TIM():
     try:
         data = request.form
+        print(data['Epsilon'])
+        if check_if_not_int(data['Epsilon']) or check_if_not_int(data['max Tirp Length']) or check_if_not_int(data['Max Gap']) or check_if_not_int(data['min_ver_support']):
+            return jsonify({'message': 'you did not give me an integer but a float or a number less then 1'}), 404
+        if int(data['min_ver_support'])>100:
+            return jsonify({'message': 'minimum vertical support cant be greater then 100'}), 404
         discretization_id = str(data['DiscretizationId'])
         if 'Epsilon' not in data:
             epsilon = int(0.0000)
         else:
             epsilon = int(data['Epsilon'])
         max_gap = int(data['Max Gap'])
-        verticale_support = float(data['min_ver_support'])
+        verticale_support = int(data['min_ver_support'])
         num_relations = int(data['num_relations'])
         max_tirp_length = int(data['max Tirp Length'])
         index_same = str(data['index_same'])
@@ -617,7 +630,7 @@ def add_TIM():
         db.session.close()
         return jsonify({'message': 'problem with data'}), 404
     try:
-        notify_by_email.send_an_email(message=f"Subject: karmalego created successfully", receiver_email=email)
+        notify_by_email.send_an_email(message=f"Subject: karmalego created succsesfuly", receiver_email=email)
         return jsonify({'message': 'karmalego created!'}), 200
     except:
         return jsonify({'message': 'cant send an email!'}), 409
