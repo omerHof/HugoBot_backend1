@@ -284,6 +284,22 @@ def load_mail(current_user):
                                                    "Category": curr_dataset.category,
                                                    "PublicPrivate": curr_dataset.public_private}
             x = x + 1
+
+        to_return["approve"] = {}
+        to_return["approveLen"] = len(users_ask_permissions)
+        print(str(len(users_ask_permissions)))
+        x = 0
+        for curr_record in users_ask_permissions:
+            curr_dataset = curr_record.dataset
+            curr_email = curr_dataset.Email
+            print(str(curr_email))
+            # full_name = current_user.FName + " " + current_user.LName
+            to_return["approve"][str(x)] = {"DatasetName": curr_dataset.Name, "Size": str(curr_dataset.size),
+                                            "Owner": curr_email,
+                                            "Category": curr_dataset.category,
+                                            "PublicPrivate": curr_dataset.public_private}
+            x = x + 1
+
         to_return['Email'] = current_user.Email
         db.session.close()
         return jsonify(to_return)
@@ -554,7 +570,7 @@ def get_disc(current_user):
 
 def check_if_not_int(num):
     num1 = float(num)
-    if num1.is_integer() and num1>1:
+    if num1.is_integer() and num1 > 1:
         return False
     else:
         return True
@@ -565,9 +581,10 @@ def add_TIM():
     try:
         data = request.form
         print(data['Epsilon'])
-        if check_if_not_int(data['Epsilon']) or check_if_not_int(data['max Tirp Length']) or check_if_not_int(data['Max Gap']) or check_if_not_int(data['min_ver_support']):
+        if check_if_not_int(data['Epsilon']) or check_if_not_int(data['max Tirp Length']) or check_if_not_int(
+                data['Max Gap']) or check_if_not_int(data['min_ver_support']):
             return jsonify({'message': 'you did not give me an integer but a float or a number less then 1'}), 404
-        if int(data['min_ver_support'])>100:
+        if int(data['min_ver_support']) > 100:
             return jsonify({'message': 'minimum vertical support cant be greater then 100'}), 404
         discretization_id = str(data['DiscretizationId'])
         if 'Epsilon' not in data:
