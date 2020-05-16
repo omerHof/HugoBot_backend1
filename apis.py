@@ -285,20 +285,23 @@ def load_mail(current_user):
                                                    "PublicPrivate": curr_dataset.public_private}
             x = x + 1
 
+        ask_me = ask_permissions.query.all()
         to_return["approve"] = {}
-        to_return["approveLen"] = len(users_ask_permissions)
-        print(str(len(users_ask_permissions)))
         x = 0
-        for curr_record in users_ask_permissions:
+        counter = 0
+        for curr_record in ask_me:
             curr_dataset = curr_record.dataset
             curr_email = curr_dataset.Email
-            print(str(curr_email))
-            # full_name = current_user.FName + " " + current_user.LName
-            to_return["approve"][str(x)] = {"DatasetName": curr_dataset.Name, "Size": str(curr_dataset.size),
-                                            "Owner": curr_email,
-                                            "Category": curr_dataset.category,
-                                            "PublicPrivate": curr_dataset.public_private}
+            if curr_email == current_user.Email:
+                # full_name = current_user.FName + " " + current_user.LName
+                to_return["approve"][str(x)] = {"DatasetName": curr_dataset.Name, "Size": str(curr_dataset.size),
+                                                "Grantee": curr_record.Email,
+                                                "Owner": curr_email,
+                                                "Category": curr_dataset.category,
+                                                "PublicPrivate": curr_dataset.public_private}
+                counter = counter + 1
             x = x + 1
+        to_return["approveLen"] = counter
 
         to_return['Email'] = current_user.Email
         db.session.close()
