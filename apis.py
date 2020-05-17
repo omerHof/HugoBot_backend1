@@ -36,6 +36,19 @@ HUGOBOT_EXECUTABLE_PATH = "HugoBot-beta-release-v1.1.5_03-01-2020/cli.py"
 CLI_PATH = SERVER_ROOT + '/' + HUGOBOT_EXECUTABLE_PATH
 MODE = "temporal-abstraction"
 DATASET_OR_PROPERTY = "per-property"
+ABSTRACTION_METHOD_CONVERSION = {'Equal Frequency': 'equal-frequency',
+                                 'Equal Width': 'equal-width',
+                                 'SAX': 'sax',
+                                 'Persist': 'persist',
+                                 'KMeans': 'kmeans',
+                                 'Knowledge-Based': 'knowledge-based',
+                                 'Gradient': 'gradient',
+                                 'TD4C-SKL': 'td4c-skl',
+                                 'TD4C-Entropy': 'td4c-entropy',
+                                 'TD4C-Entropy-IG': 'td4c-entropy-ig',
+                                 'TD4C-Cosine': 'td4c-cosine',
+                                 'TD4C-Diffsum': 'td4c-diffsum',
+                                 'TD4C-Diffmax': 'td4c-diffmax'}
 
 
 # this is the users table
@@ -463,15 +476,27 @@ def add_new_disc(current_user):
     # retrieve temporal property id list from vmap file
     temporal_variables = []
     vmap_path = dataset_path + '/' + 'VMap.csv'
-    with open(vmap_path, 'rb') as vmap:
-        for row in vmap[1:]:
-            temporal_variables.append(row[0])
+    with open(vmap_path, 'r') as vmap:
+        counter = 0
+        for row in vmap:
+            if counter > 0:
+                temporal_variables.append(row.split(',')[0])
+            counter = counter + 1
 
     preprocessing_path = dataset_path + '/' + 'preprocessing.csv'
-    with open(preprocessing_path, 'wb') as preprocessing:
-        writer = csv.writer(preprocessing, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+    with open(preprocessing_path, 'w', newline='') as preprocessing:
+        writer = csv.writer(preprocessing, delimiter=',')
         writer.writerow(['TemporalPropertyID', 'PAAWindowSize', 'StdCoefficient', 'MaxGap'])
-        writer.writerow([PAA])
+        for variable in temporal_variables:
+            writer.writerow([variable, str(PAA), '', '5'])
+
+    temporal_abstraction_path = dataset_path + '/' + 'temporal_abstraction.csv'
+    with open(temporal_abstraction_path, 'w', newline='') as temporal_abstraction:
+        writer = csv.writer(temporal_abstraction, delimiter=',')
+        writer.writerow(['TemporalPropertyID', 'Method', 'NbBins', 'GradientWindowSize'])
+        for variable in temporal_variables:
+            ab_method_code = ABSTRACTION_METHOD_CONVERSION[AbMethod]
+            writer.writerow([variable, ab_method_code, NumStates])
 
     config = defaultdict(empty_string)
     config["cli_path"] = " " + CLI_PATH
@@ -484,8 +509,6 @@ def add_new_disc(current_user):
     config["temporal_abstraction_path"] = " " + dataset_path + '/' + "temporal_abstraction.csv"
 
     run_hugobot(config)
-
-    print("phew we are done?")
 
     # with zipfile.ZipFile('somePath/bla2.zip', 'r') as zip_ref:
     #    zip_ref.extractall('C:/Users/yonatan/PycharmProjects/HugoBotServer')
