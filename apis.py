@@ -1,3 +1,5 @@
+import csv
+
 from flask import Flask, request, jsonify, make_response, send_file
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -447,8 +449,6 @@ def add_new_disc(current_user):
     create_directory_disc(dataset_name, disc_id)
     db.session.close()
 
-    print("phew we are here...")
-
     # temporal-abstraction 'Path to dataset file' 'Path to output dir' per-property
     # -s (when using Gradient or KnowledgeBased) 'Path to states file' (when using Gradient or KnowledgeBased)
     # 'Path to Preprocessing file' 'Path to Temporal Abstraction file'
@@ -457,6 +457,21 @@ def add_new_disc(current_user):
     # disc_id = "119d401c-7109-4710-9a7d-a2c4f82ece78"
     dataset_path = SERVER_ROOT + '/' + dataset_name
     disc_path = SERVER_ROOT + '/' + dataset_name + '/' + disc_id
+
+    # create preprocessing and temporal abstraction files from user input
+
+    # retrieve temporal property id list from vmap file
+    temporal_variables = []
+    vmap_path = dataset_path + '/' + 'VMap.csv'
+    with open(vmap_path, 'rb') as vmap:
+        for row in vmap[1:]:
+            temporal_variables.append(row[0])
+
+    preprocessing_path = dataset_path + '/' + 'preprocessing.csv'
+    with open(preprocessing_path, 'wb') as preprocessing:
+        writer = csv.writer(preprocessing, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(['TemporalPropertyID', 'PAAWindowSize', 'StdCoefficient', 'MaxGap'])
+        writer.writerow([PAA])
 
     config = defaultdict(empty_string)
     config["cli_path"] = " " + CLI_PATH
@@ -623,6 +638,7 @@ def add_TIM():
                 max_tirp_length = max_tirp_length
                 path = SERVER_ROOT + '/' + directory_path + '/' + filename
                 out_path = SERVER_ROOT + '/' + directory_path + '/' + KL_id + '/' + filename
+                print(out_path)
                 print_output_incrementally = True
                 entity_ids_num = 2
                 index_same = index_same
@@ -637,8 +653,8 @@ def add_TIM():
                                                             max_tirp_length=max_tirp_length, num_comma=2,
                                                             entity_ids_num=entity_ids_num,
                                                             semicolon_end=semicolon_end, need_one_sized=need_one_sized)
-                if not print_output_incrementally:
-                    lego_0.print_frequent_tirps(out_path)
+                # if not print_output_incrementally:
+                lego_0.print_frequent_tirps(out_path)
             else:
                 continue
         KL = karma_lego(id=KL_id, epsilon=epsilon, min_ver_support=verticale_support, num_relations=num_relations,
@@ -828,32 +844,35 @@ def step_two_create(current_user):
 @token_required
 def upload_stepthree(current_user):
     try:
-        file = request.files['file']
-        print(file)
-        dataset_name = request.form['datasetName']
-        print(dataset_name)
-        file.save(
-            os.path.join(SERVER_ROOT, dataset_name, secure_filename(file.filename)))
+        if 'file' in request.files:
+            file = request.files['file']
+            print(file)
+            dataset_name = request.form['datasetName']
+            print(dataset_name)
+            file.save(
+                os.path.join(SERVER_ROOT, dataset_name, secure_filename(file.filename)))
+            return jsonify({'message': 'Entity File Successfully Uploaded!'})
     except:
         db.session.rollback()
         db.session.close()
         return jsonify({'message': 'problem with data'}), 400
     db.session.close()
-    return jsonify({'message': 'Entity File Successfully Uploaded!'})
+    return jsonify({'message': 'Dataset upload done!'})
 
 
 @app.route("/getInfo", methods=["GET"])
 def get_all_info_on_dataset():
     dataset_name = request.args.get("id")
-    print(dataset_name)
-    return jsonify({"Name": "sepsis",
-                    "category": "sports",
-                    "owner_name": "yonatan shaya",
-                    "source": "raz himself",
-                    "Description": "the sepsis dataset",
-                    "size": "8.54 MB",
-                    "views": "17",
-                    "downloads": "2"}), 200
+    info = info_about_datasets.query.filter_by(Name=dataset_name).first()
+    print(info.Name)
+    return jsonify({"Name": info.Name,
+                    "category": info.category,
+                    "owner_name": info.Email,
+                    "source": info.source,
+                    "Description": info.Description,
+                    "size": str(info.size) + " MB",
+                    "views": info.views,
+                    "downloads": info.downloads}), 200
 
 
 @app.route("/getVMapFile", methods=["GET"])
