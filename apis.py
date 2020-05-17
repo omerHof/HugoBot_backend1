@@ -1,22 +1,19 @@
-import csv
-
-from flask import Flask, request, jsonify, make_response, send_file
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
-import jwt
-import datetime
-from collections import defaultdict
-from functools import wraps
-from flask_cors import CORS
-from KarmaLego_Framework import RunKarmaLego
-# import data1
-import uuid
-import notify_by_email
 import check_email
-import time
+from collections import defaultdict
+import csv
+import datetime
 # import json
+import jwt
+from flask import Flask, request, jsonify, make_response, send_file
+from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
+from functools import wraps
+from KarmaLego_Framework import RunKarmaLego
+import notify_by_email
 import os
-# import csv
+import time
+import uuid
+from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import zipfile
 
@@ -676,8 +673,8 @@ def add_TIM():
                                                             max_tirp_length=max_tirp_length, num_comma=2,
                                                             entity_ids_num=entity_ids_num,
                                                             semicolon_end=semicolon_end, need_one_sized=need_one_sized)
-                # if not print_output_incrementally:
-                lego_0.print_frequent_tirps(out_path)
+                if not print_output_incrementally:
+                    lego_0.print_frequent_tirps(out_path)
             else:
                 continue
         KL = karma_lego(id=KL_id, epsilon=epsilon, min_ver_support=verticale_support, num_relations=num_relations,
