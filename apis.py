@@ -8,6 +8,7 @@ from flask import Flask, request, jsonify, make_response, send_file
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from functools import wraps
+from itertools import islice
 from KarmaLego_Framework import RunKarmaLego
 import notify_by_email
 import os
@@ -29,6 +30,8 @@ def empty_string():
 
 
 SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
+RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
+RAW_DATA_BODY_FORMAT = ["non-negative integer", "integer", "non-negative integer", "float"]
 HUGOBOT_EXECUTABLE_PATH = "HugoBot-beta-release-v1.1.5_03-01-2020/cli.py"
 CLI_PATH = SERVER_ROOT + '/' + HUGOBOT_EXECUTABLE_PATH
 MODE = "temporal-abstraction"
@@ -417,6 +420,64 @@ def delete_not_necessary(directory_path):
             os.remove(filename)
 
 
+def check_non_negative_int(s):
+    try:
+        return int(s) >= 0
+    except ValueError:
+        return False
+
+
+def check_int(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+
+def check_float(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+
+def validate_raw_data_header(raw_data_path):
+    with open(raw_data_path) as data:
+        reader = csv.reader(data, delimiter=',')
+        for header in islice(reader, 0, 1):
+
+            # solves a utf-8-bom encoding issue where ï»¿ gets added in the beginning of .csv files.
+            entity_id_to_compare = header[0].replace("ï»¿", "")
+
+            if len(header) == len(RAW_DATA_HEADER_FORMAT):
+                if entity_id_to_compare == RAW_DATA_HEADER_FORMAT[0]:
+                    if header[1] == RAW_DATA_HEADER_FORMAT[1]:
+                        if header[2] == RAW_DATA_HEADER_FORMAT[2]:
+                            if header[3] == RAW_DATA_HEADER_FORMAT[3]:
+                                return True
+            return False
+
+
+def validate_raw_data_body(raw_data_path):
+    with open(raw_data_path) as data:
+        reader = csv.reader(data, delimiter=',')
+        i = 0
+        flag = True
+        for row in reader:
+            if i == 0:
+                i = i + 1
+                continue
+            print(i)
+            flag &= check_non_negative_int(row[0])
+            flag &= check_int(row[1])
+            flag &= check_non_negative_int(row[2])
+            flag &= check_float(row[3])
+            i = i + 1
+        return flag
+
+
 @app.route('/addNewDisc', methods=['POST'])
 @token_required
 def add_new_disc(current_user):
@@ -686,8 +747,8 @@ def add_TIM():
         db.session.close()
         return jsonify({'message': 'problem with data'}), 404
     try:
-        notify_by_email.send_an_email(message=f"Subject: karmalego created succsesfuly", receiver_email=email)
-        return jsonify({'message': 'karmalego created!'}), 200
+        # notify_by_email.send_an_email(message=f"Subject: karmalego created succsesfuly", receiver_email=email)
+        return jsonify({'message': 'karmalego created!', 'KL_id': KL_id}), 200
     except:
         return jsonify({'message': 'cant send an email!'}), 409
 
@@ -800,22 +861,42 @@ def upload_stepone(current_user):
     # email = "3"
 
     # Validate dataset file integrity
+    # correct format for raw data file:
+    # EntityID	TemporalPropertyID	TimeStamp	TemporalPropertyValue
 
-    # Save the dataset file
+    # Save the dataset file. in case it does not meet the requirements, delete it.
 
     print(dataset_name)
     create_directory_for_dataset(dataset_name)
-    raw_data_file.save(
-        os.path.join(SERVER_ROOT, dataset_name, secure_filename(raw_data_file.filename)))
+
+    raw_data_path = os.path.join(SERVER_ROOT, dataset_name, secure_filename(raw_data_file.filename))
+
+    raw_data_file.save(raw_data_path)
+
+    if not validate_raw_data_header(raw_data_path):
+        os.remove(raw_data_path)
+        os.rmdir(os.path.join(SERVER_ROOT, dataset_name))
+        return jsonify({'message': 'Either your Dataset\'s header is not in the correct format, '
+                                   'or you have more than ' +
+                                   str(len(RAW_DATA_HEADER_FORMAT)) +
+                                   ' columns in your data'}), 400
+
+    if not validate_raw_data_body(raw_data_path):
+        os.remove(raw_data_path)
+        os.rmdir(os.path.join(SERVER_ROOT, dataset_name))
+        return jsonify({'message': 'at least one row is not in the correct format'}), 400
+
+    os.remove(raw_data_path)
+    os.rmdir(os.path.join(SERVER_ROOT, dataset_name))
 
     # rel_path=rel_path,
     # pub_date=pub_date,
 
-    dataset1 = info_about_datasets(Name=dataset_name, Description=description, source=dataset_source,
-                                   public_private=public_private, category=category, size=8.54, views=0,
-                                   downloads=0, owner=current_user)
-    db.session.add(dataset1)
-    db.session.commit()
+    # dataset1 = info_about_datasets(Name=dataset_name, Description=description, source=dataset_source,
+    #                                public_private=public_private, category=category, size=8.54, views=0,
+    #                                downloads=0, owner=current_user)
+    # db.session.add(dataset1)
+    # db.session.commit()
 
     # db.session.rollback()
     # db.session.close()
@@ -895,11 +976,52 @@ def get_all_info_on_dataset():
                     "downloads": info.downloads}), 200
 
 
+@app.route("/getRawDataFile", methods=["GET"])
+def get_raw_data_file():
+    dataset_name = request.args.get("id")
+    print(dataset_name)
+    return send_file(dataset_name + '/' + dataset_name + '.csv'), 200
+
+
 @app.route("/getVMapFile", methods=["GET"])
 def get_vmap_file():
     dataset_name = request.args.get("id")
     print(dataset_name)
     return send_file(dataset_name + '/' + 'VMap.csv'), 200
+
+
+# @app.route("/getVMapFile", methods=["GET"])
+# def get_vmap_file():
+#     dataset_name = request.args.get("id")
+#     print(dataset_name)
+#     return send_file(dataset_name + '/' + 'VMap.csv'), 200
+
+
+@app.route("/getEntitiesFile", methods=["GET"])
+def get_entities_file():
+    dataset_name = request.args.get("id")
+    print(dataset_name)
+    return send_file(dataset_name + '/' + 'Entities.csv'), 200
+
+
+@app.route("/getStatesFile", methods=["GET"])
+def get_states_file():
+    dataset_name = request.args.get("dataset_id")
+    print(dataset_name)
+    disc_name = request.args.get("disc_id")
+    print(disc_name)
+    return send_file(dataset_name + '/' + disc_name + '/' + 'states.csv'), 200
+
+
+@app.route("/getKLOutput", methods=["GET"])
+def get_kl_file():
+    dataset_name = request.args.get("dataset_id")
+    print(dataset_name)
+    disc_name = request.args.get("disc_id")
+    print(disc_name)
+    # kl_name = request.args.get("disc_id")
+    # print(kl_name)
+    return send_file(dataset_name + '/' + disc_name + '/' + 'KL.txt'), 200
 
 
 if __name__ == '__main__':
