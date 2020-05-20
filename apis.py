@@ -32,6 +32,7 @@ def empty_string():
 SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
 RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
 RAW_DATA_BODY_FORMAT = ["non-negative integer", "integer", "non-negative integer", "float"]
+VMAP_HEADER_FORMAT = ["Variable ID", "Variable Name", "Description"]
 HUGOBOT_EXECUTABLE_PATH = "HugoBot-beta-release-v1.1.5_03-01-2020/cli.py"
 CLI_PATH = SERVER_ROOT + '/' + HUGOBOT_EXECUTABLE_PATH
 MODE = "temporal-abstraction"
@@ -967,15 +968,28 @@ def upload_stepthree(current_user):
             print(file)
             dataset_name = request.form['datasetName']
             print(dataset_name)
-            file.save(
-                os.path.join(SERVER_ROOT, dataset_name, secure_filename(file.filename)))
-            return jsonify({'message': 'Entity File Successfully Uploaded!'})
+
+            entity_path = os.path.join(SERVER_ROOT, dataset_name, secure_filename(file.filename))
+
+            file.save(entity_path)
+
+            with open(entity_path) as entities:
+                reader = csv.reader(entities, delimiter=',')
+                for header in islice(reader, 0, 1):
+
+                    # solves a utf-8-bom encoding issue where ï»¿ gets added in the beginning of .csv files.
+                    entity_id_to_compare = header[0].replace("ï»¿", "")
+
+                    if entity_id_to_compare != "id":
+                        entities.close()
+                        os.remove(entity_path)
+                        return jsonify({'message': 'leftmost column of entities file must be \"id\"'}), 400
     except:
         db.session.rollback()
         db.session.close()
         return jsonify({'message': 'problem with data'}), 400
     db.session.close()
-    return jsonify({'message': 'Dataset upload done!'})
+    return jsonify({'message': 'Dataset upload done!'}), 200
 
 
 @app.route("/getInfo", methods=["GET"])
