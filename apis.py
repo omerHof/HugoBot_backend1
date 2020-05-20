@@ -31,7 +31,6 @@ def empty_string():
 
 SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
 RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
-RAW_DATA_BODY_FORMAT = ["non-negative integer", "integer", "non-negative integer", "float"]
 VMAP_HEADER_FORMAT = ["Variable ID", "Variable Name", "Description"]
 HUGOBOT_EXECUTABLE_PATH = "HugoBot-beta-release-v1.1.5_03-01-2020/cli.py"
 CLI_PATH = SERVER_ROOT + '/' + HUGOBOT_EXECUTABLE_PATH
@@ -478,6 +477,48 @@ def validate_raw_data_body(raw_data_path):
         return flag
 
 
+def get_variable_list(data_path, column):
+    try:
+        with open(data_path) as data:
+            variable_list = []
+            reader = csv.reader(data, delimiter=',')
+            for row in reader:
+                variable_list.append(row[column])
+            variable_list = variable_list[1:]  # truncate header
+            variable_list = list(set(variable_list))  # remove duplicates
+            data.close()
+            return variable_list
+    except (IOError, PermissionError):
+        return []
+
+
+def validate_vmap_header(vmap_path):
+    with open(vmap_path) as vmap:
+        reader = csv.reader(vmap, delimiter=',')
+        for header in islice(reader, 0, 1):
+
+            # solves a utf-8-bom encoding issue where ï»¿ gets added in the beginning of .csv files.
+            variable_id_to_compare = header[0].replace("ï»¿", "")
+
+            if len(header) == len(VMAP_HEADER_FORMAT):
+                if variable_id_to_compare == VMAP_HEADER_FORMAT[0]:
+                    if header[1] == VMAP_HEADER_FORMAT[1]:
+                        if header[2] == VMAP_HEADER_FORMAT[2]:
+                            return True
+            return False
+
+
+def validate_id_integrity(raw_data_path, vmap_path):
+    raw_data_variable_list = get_variable_list(raw_data_path, 1)
+    vmap_variable_list = get_variable_list(vmap_path, 0)
+    return sorted(raw_data_variable_list) == sorted(vmap_variable_list)
+
+
+def validate_entity_id_integrity(raw_data_path, entity_path):
+    raw_data_entity_list = get_variable_list(raw_data_path, 0)
+    entity_list_entity_list = get_variable_list(entity_path, 0)
+
+
 @app.route('/addNewDisc', methods=['POST'])
 @token_required
 def add_new_disc(current_user):
@@ -910,8 +951,24 @@ def upload_steptwo(current_user):
         print(file)
         dataset_name = request.form['datasetName']
         print(dataset_name)
-        file.save(
-            os.path.join(SERVER_ROOT, dataset_name, secure_filename(file.filename)))
+        dataset_path = os.path.join(SERVER_ROOT, dataset_name)
+        raw_data_path = os.path.join(dataset_path,dataset_name + '.csv')
+        vmap_path = os.path.join(dataset_path, secure_filename(file.filename))
+        file.save(vmap_path)
+
+        if not validate_vmap_header(vmap_path):
+            os.remove(vmap_path)
+            return jsonify({'message': 'Either your VMap File\'s header is not in the correct format, '
+                                       'or you have more than ' +
+                                       str(len(VMAP_HEADER_FORMAT)) +
+                                       ' columns in your data'}), 400
+
+        if not validate_id_integrity(raw_data_path,vmap_path):
+            os.remove(vmap_path)
+            return jsonify({'message': 'The list of variables you provided does not match the raw data file. '
+                                       'Please make sure you are mapping each and every variable id in your data,'
+                                       'and only the ones in your data.'}), 400
+
     except:
         db.session.rollback()
         db.session.close()
@@ -969,6 +1026,8 @@ def upload_stepthree(current_user):
             dataset_name = request.form['datasetName']
             print(dataset_name)
 
+            dataset_path = os.path.join(SERVER_ROOT, dataset_name)
+            raw_data_path = os.path.join(dataset_path, dataset_name + '.csv')
             entity_path = os.path.join(SERVER_ROOT, dataset_name, secure_filename(file.filename))
 
             file.save(entity_path)
@@ -984,6 +1043,12 @@ def upload_stepthree(current_user):
                         entities.close()
                         os.remove(entity_path)
                         return jsonify({'message': 'leftmost column of entities file must be \"id\"'}), 400
+
+            if not validate_entity_id_integrity(raw_data_path, entity_path):
+                os.remove(entity_path)
+                return jsonify({'message': 'The list of entities you provided does not match the raw data file. '
+                                           'Please make sure you mapping each and every entity id in your data,'
+                                           'and only the ones in your data.'}), 400
     except:
         db.session.rollback()
         db.session.close()
