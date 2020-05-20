@@ -1,15 +1,15 @@
 Variable ID,Variable Name,Description
 44,f,f
 55,a,abbb
-,,
-,,
-,,
-,,
-,,
-,,
-,,
-,,
-,,
-,,
-,,
-,,
+1,b,a
+5,c,b
+39,d,c
+40,e,d
+41,o,e
+42,g,f
+43,h,g
+2,i,h
+3,j,i
+4,k,j
+6,l,k
+-1,m,l

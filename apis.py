@@ -929,6 +929,13 @@ def step_two_create(current_user):
 
         for i in range(len(file)):
             file[i] = file[i].split(',')
+            if len(file[i]) != 3 or file[i][0] == "" or file[i][1] == "" or file[i][2] == "":
+                return jsonify({'message': 'please verify all variable names and/or descriptions are not empty'}), 400
+
+        # no need to check ids
+        variable_names = [row[1] for row in file]
+        if len(variable_names) != len(set(variable_names)):
+            return jsonify({'message': 'please verify there are no duplicate variable names'}), 400
 
         print(file)
         dataset_name = request.form['datasetName']
