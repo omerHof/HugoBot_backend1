@@ -469,7 +469,6 @@ def validate_raw_data_body(raw_data_path):
             if i == 0:
                 i = i + 1
                 continue
-            print(i)
             flag &= check_non_negative_int(row[0])
             flag &= check_int(row[1])
             flag &= check_non_negative_int(row[2])
@@ -886,9 +885,6 @@ def upload_stepone(current_user):
         os.rmdir(os.path.join(SERVER_ROOT, dataset_name))
         return jsonify({'message': 'at least one row is not in the correct format'}), 400
 
-    os.remove(raw_data_path)
-    os.rmdir(os.path.join(SERVER_ROOT, dataset_name))
-
     # rel_path=rel_path,
     # pub_date=pub_date,
 
@@ -928,11 +924,25 @@ def upload_steptwo(current_user):
 def step_two_create(current_user):
     try:
         file = request.form['csv']
-        # needs additional work
+
+        file = file.split('\n')
+
+        for i in range(len(file)):
+            file[i] = file[i].split(',')
+
         print(file)
         dataset_name = request.form['datasetName']
         print(dataset_name)
-        # file.save(os.path.join(SERVER_ROOT,dataset_name, secure_filename(file.filename)))
+
+        dataset_path = SERVER_ROOT + '/' + dataset_name
+        vmap_path = dataset_path + '/' + 'VMap.csv'
+
+        with open(vmap_path, 'w', newline='') as vmap:
+            writer = csv.writer(vmap, delimiter=',')
+            writer.writerow(['Variable ID', 'Variable Name', 'Description'])
+            for row in islice(file, 0, None):
+                writer.writerow([row[0], row[1], row[2]])
+
     except:
         db.session.rollback()
         db.session.close()
