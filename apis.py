@@ -866,28 +866,19 @@ def upload_stepone(current_user):
 
     # Now, save the info as a tuple in the DB and the file as part of the file system:
     # info_about_datasets tuple:
-    # Name (PK), Pub_date, Description, Rel_path, Public/private, Category, Size, Views, Downloads, Email
+    # Name (PK), Description, Public/private, Category, Size, Views, Downloads, Email
 
     # Name: user input
     dataset_name = request.form['datasetName']
 
-    # Pub_date: generated (get current time)
-
     # Description: user input
     description = request.form['description']
-
-    # Rel_path: generated (using user input - the name of the directory is the dataset name)
-    # rel_path = os.path.join('C:/Users/Raz/PycharmProjects/HugoBotServer', dataset_name, raw_data_file.filename)
 
     # Public/private: user input
     public_private = request.form['publicPrivate']
 
     # Category: user input
     category = request.form['category']
-
-    # Size: generated (calculated from file)
-    # size = os.path.getsize(
-    #     os.path.join('C:/Users/Raz/PycharmProjects/HugoBotServer', dataset_name, raw_data_file.filename))
 
     # source: user input
     dataset_source = request.form['datasetSource']
@@ -918,6 +909,10 @@ def upload_stepone(current_user):
 
     raw_data_file.save(raw_data_path)
 
+    # Size: generated (calculated from file)
+    size = os.path.getsize(raw_data_path)
+    size = round(size / 1000000, 2)  # B -> MB
+
     if not validate_raw_data_header(raw_data_path):
         os.remove(raw_data_path)
         os.rmdir(os.path.join(SERVER_ROOT, dataset_name))
@@ -931,14 +926,11 @@ def upload_stepone(current_user):
         os.rmdir(os.path.join(SERVER_ROOT, dataset_name))
         return jsonify({'message': 'at least one row is not in the correct format'}), 400
 
-    # rel_path=rel_path,
-    # pub_date=pub_date,
-
-    # dataset1 = info_about_datasets(Name=dataset_name, Description=description, source=dataset_source,
-    #                                public_private=public_private, category=category, size=8.54, views=0,
-    #                                downloads=0, owner=current_user)
-    # db.session.add(dataset1)
-    # db.session.commit()
+    dataset1 = info_about_datasets(Name=dataset_name, Description=description, source=dataset_source,
+                                   public_private=public_private, category=category, size=size, views=0,
+                                   downloads=0, owner=current_user)
+    db.session.add(dataset1)
+    db.session.commit()
 
     # db.session.rollback()
     # db.session.close()
@@ -968,7 +960,7 @@ def upload_steptwo(current_user):
                                        str(len(VMAP_HEADER_FORMAT)) +
                                        ' columns in your data'}), 400
 
-        if not validate_id_integrity(raw_data_path,vmap_path):
+        if not validate_id_integrity(raw_data_path, vmap_path):
             os.remove(vmap_path)
             return jsonify({'message': 'The list of variables you provided does not match the raw data file. '
                                        'Please make sure you are mapping each and every variable id in your data,'
@@ -1067,22 +1059,22 @@ def upload_stepthree(current_user):
 def increment_download():
     dataset_name = request.args.get('dataset_id')
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
-    download = dataset.downloads+1
+    download = dataset.downloads + 1
     dataset.downloads = download
     db.session.commit()
     db.session.close()
-    return jsonify({'message': 'success'}), 200
+    return jsonify({'message': 'success', 'downloads': download}), 200
 
 
 @app.route("/incrementViews", methods=["POST"])
 def increment_views():
     dataset_name = request.args.get('dataset_id')
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
-    views = dataset.views+1
+    views = dataset.views + 1
     dataset.views = views
     db.session.commit()
     db.session.close()
-    return jsonify({'message': 'success'}), 200
+    return jsonify({'message': 'success', 'views': views}), 200
 
 
 @app.route("/getInfo", methods=["GET"])
