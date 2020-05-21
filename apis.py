@@ -582,14 +582,14 @@ def add_new_disc(current_user):
                 temporal_variables.append(row.split(',')[0])
             counter = counter + 1
 
-    preprocessing_path = dataset_path + '/' + 'preprocessing.csv'
+    preprocessing_path = disc_path + '/' + 'preprocessing.csv'
     with open(preprocessing_path, 'w', newline='') as preprocessing:
         writer = csv.writer(preprocessing, delimiter=',')
         writer.writerow(['TemporalPropertyID', 'PAAWindowSize', 'StdCoefficient', 'MaxGap'])
         for variable in temporal_variables:
             writer.writerow([variable, str(PAA), '', '5'])
 
-    temporal_abstraction_path = dataset_path + '/' + 'temporal_abstraction.csv'
+    temporal_abstraction_path = disc_path + '/' + 'temporal_abstraction.csv'
     with open(temporal_abstraction_path, 'w', newline='') as temporal_abstraction:
         writer = csv.writer(temporal_abstraction, delimiter=',')
         writer.writerow(['TemporalPropertyID', 'Method', 'NbBins', 'GradientWindowSize'])
@@ -604,8 +604,8 @@ def add_new_disc(current_user):
     config["dataset_path"] = " " + dataset_path + '/' + dataset_name + ".csv"
     config["output_dir"] = " " + disc_path
     config["output_dir_name"] = " " + disc_id
-    config["preprocessing_path"] = " " + dataset_path + '/' + "preprocessing.csv"
-    config["temporal_abstraction_path"] = " " + dataset_path + '/' + "temporal_abstraction.csv"
+    config["preprocessing_path"] = " " + disc_path + '/' + "preprocessing.csv"
+    config["temporal_abstraction_path"] = " " + disc_path + '/' + "temporal_abstraction.csv"
 
     run_hugobot(config)
 
@@ -1107,6 +1107,8 @@ def get_variable_list_request():
         dataset_path = os.path.join(SERVER_ROOT, dataset_name, dataset_name + '.csv')
         column_in_data = 1
         list_to_return = get_variable_list(dataset_path, column_in_data)
+        list_to_return = [int(x) for x in list_to_return]
+        list_to_return = sorted(list_to_return)
         return jsonify({'VMapList': list_to_return})
     except IOError:
         return jsonify({'message': 'a variable list for an unknown dataset has been received.'

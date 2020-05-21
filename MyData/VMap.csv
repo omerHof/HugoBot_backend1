@@ -1,14 +1,14 @@
 Variable ID,Variable Name,Description
-3,a,a
-4,b,b
-1,c,c
-40,d,d
-5,e,e
-2,f,f
-55,g,g
-39,h,h
-6,i,i
-42,j,j
-43,k,k
-44,l,l
-41,m,m
+1,b,a
+2,i,h
+3,j,i
+4,k,j
+5,c,b
+6,l,k
+39,d,c
+40,e,d
+41,o,e
+42,g,f
+43,h,g
+44,f,f
+55,a,abbb
