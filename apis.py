@@ -1116,7 +1116,6 @@ def get_variable_list_request():
         column_in_data = 1
         list_to_return = get_variable_list(dataset_path, column_in_data)
         return jsonify({'VMapList': list_to_return})
-
     except IOError:
         return jsonify({'message': 'a variable list for an unknown dataset has been received.'
                                    ' please check your request and try again.'}), 400
@@ -1124,9 +1123,12 @@ def get_variable_list_request():
 
 @app.route("/getVMapFile", methods=["GET"])
 def get_vmap_file():
-    dataset_name = request.args.get("id")
-    print(dataset_name)
-    return send_file(dataset_name + '/' + 'VMap.csv'), 200
+    try:
+        dataset_name = request.args.get("id")
+        print(dataset_name)
+        return send_file(dataset_name + '/' + 'VMap.csv'), 200
+    except FileNotFoundError:
+        return jsonify({'message': 'the request VMap file cannot be found.'}), 404
 
 
 # @app.route("/getVMapFile", methods=["GET"])
@@ -1138,29 +1140,38 @@ def get_vmap_file():
 
 @app.route("/getEntitiesFile", methods=["GET"])
 def get_entities_file():
-    dataset_name = request.args.get("id")
-    print(dataset_name)
-    return send_file(dataset_name + '/' + 'Entities.csv'), 200
+    try:
+        dataset_name = request.args.get("id")
+        print(dataset_name)
+        return send_file(dataset_name + '/' + 'Entities.csv'), 200
+    except FileNotFoundError:
+        return jsonify({'message': 'the request Entities file cannot be found.'}), 404
 
 
 @app.route("/getStatesFile", methods=["GET"])
 def get_states_file():
-    dataset_name = request.args.get("dataset_id")
-    print(dataset_name)
-    disc_name = request.args.get("disc_id")
-    print(disc_name)
-    return send_file(dataset_name + '/' + disc_name + '/' + 'states.csv'), 200
+    try:
+        dataset_name = request.args.get("dataset_id")
+        print(dataset_name)
+        disc_name = request.args.get("disc_id")
+        print(disc_name)
+        return send_file(dataset_name + '/' + disc_name + '/' + 'states.csv'), 200
+    except FileNotFoundError:
+        return jsonify({'message': 'the request States file cannot be found.'}), 404
 
 
 @app.route("/getKLOutput", methods=["GET"])
 def get_kl_file():
-    dataset_name = request.args.get("dataset_id")
-    print(dataset_name)
-    disc_name = request.args.get("disc_id")
-    print(disc_name)
-    # kl_name = request.args.get("disc_id")
-    # print(kl_name)
-    return send_file(dataset_name + '/' + disc_name + '/' + 'KL.txt'), 200
+    try:
+        dataset_name = request.args.get("dataset_id")
+        print(dataset_name)
+        disc_name = request.args.get("disc_id")
+        print(disc_name)
+        # kl_name = request.args.get("disc_id")
+        # print(kl_name)
+        return send_file(dataset_name + '/' + disc_name + '/' + 'KL.txt'), 200
+    except FileNotFoundError:
+        return jsonify({'message': 'the request KarmaLego output file cannot be found.'}), 404
 
 
 if __name__ == '__main__':
