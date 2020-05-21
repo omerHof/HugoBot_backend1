@@ -910,6 +910,10 @@ def upload_stepone(current_user):
     print(dataset_name)
     create_directory_for_dataset(dataset_name)
 
+    print(raw_data_file.filename)
+
+    raw_data_file.filename = dataset_name + '.csv'
+
     raw_data_path = os.path.join(SERVER_ROOT, dataset_name, secure_filename(raw_data_file.filename))
 
     raw_data_file.save(raw_data_path)
@@ -952,7 +956,8 @@ def upload_steptwo(current_user):
         dataset_name = request.form['datasetName']
         print(dataset_name)
         dataset_path = os.path.join(SERVER_ROOT, dataset_name)
-        raw_data_path = os.path.join(dataset_path,dataset_name + '.csv')
+        raw_data_path = os.path.join(dataset_path, dataset_name + '.csv')
+        file.filename = "VMap.csv"
         vmap_path = os.path.join(dataset_path, secure_filename(file.filename))
         file.save(vmap_path)
 
@@ -1028,6 +1033,7 @@ def upload_stepthree(current_user):
 
             dataset_path = os.path.join(SERVER_ROOT, dataset_name)
             raw_data_path = os.path.join(dataset_path, dataset_name + '.csv')
+            file.filename = "Entities.csv"
             entity_path = os.path.join(SERVER_ROOT, dataset_name, secure_filename(file.filename))
 
             file.save(entity_path)
@@ -1047,7 +1053,7 @@ def upload_stepthree(current_user):
             if not validate_entity_id_integrity(raw_data_path, entity_path):
                 os.remove(entity_path)
                 return jsonify({'message': 'The list of entities you provided does not match the raw data file. '
-                                           'Please make sure you mapping each and every entity id in your data,'
+                                           'Please make sure you are mapping each and every entity id in your data,'
                                            'and only the ones in your data.'}), 400
     except:
         db.session.rollback()
@@ -1055,6 +1061,28 @@ def upload_stepthree(current_user):
         return jsonify({'message': 'problem with data'}), 400
     db.session.close()
     return jsonify({'message': 'Dataset upload done!'}), 200
+
+
+@app.route("/incrementDownload", methods=["POST"])
+def increment_download():
+    dataset_name = request.args.get('dataset_id')
+    dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
+    download = dataset.downloads+1
+    dataset.downloads = download
+    db.session.commit()
+    db.session.close()
+    return jsonify({'message': 'success'}), 200
+
+
+@app.route("/incrementViews", methods=["POST"])
+def increment_views():
+    dataset_name = request.args.get('dataset_id')
+    dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
+    views = dataset.views+1
+    dataset.views = views
+    db.session.commit()
+    db.session.close()
+    return jsonify({'message': 'success'}), 200
 
 
 @app.route("/getInfo", methods=["GET"])
@@ -1077,6 +1105,21 @@ def get_raw_data_file():
     dataset_name = request.args.get("id")
     print(dataset_name)
     return send_file(dataset_name + '/' + dataset_name + '.csv'), 200
+
+
+@app.route("/getVariableList", methods=["GET"])
+def get_variable_list_request():
+    try:
+        dataset_name = request.args.get("dataset_id")
+        print(dataset_name)
+        dataset_path = os.path.join(SERVER_ROOT, dataset_name, dataset_name + '.csv')
+        column_in_data = 1
+        list_to_return = get_variable_list(dataset_path, column_in_data)
+        return jsonify({'VMapList': list_to_return})
+
+    except IOError:
+        return jsonify({'message': 'a variable list for an unknown dataset has been received.'
+                                   ' please check your request and try again.'}), 400
 
 
 @app.route("/getVMapFile", methods=["GET"])
