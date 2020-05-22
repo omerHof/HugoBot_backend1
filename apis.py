@@ -355,6 +355,28 @@ def accept_permission(current_user):
         return jsonify({'message': 'there has been an error!'}), 500
 
 
+# takes 2 arguments in the url, 'dataset' and 'userEmail' and removes a user's permission request
+@app.route('/rejectPermission', methods=['GET'])
+@token_required
+def reject_permission(current_user):
+    try:
+        dataset_name = request.args.get('dataset')
+        user_email = request.args.get('userEmail')
+        record = ask_permissions.query.filter_by(Email=user_email, name_of_dataset=dataset_name).first()
+        user_email_check = record.dataset.owner.Email
+        print("input email:" + user_email)
+        print("db email:" + user_email_check)
+        if current_user.Email != user_email_check:
+            db.session.close()
+            return jsonify({'message': 'dont try to fool me, you dont own this dataset!'}), 400
+        db.session.delete(record)
+        db.session.commit()
+        db.session.close()
+        return jsonify({'message': 'permission accepted!'})
+    except:
+        return jsonify({'message': 'there has been an error!'}), 500
+
+
 # sends all the info about the data sets
 @app.route('/getAllDataSets', methods=['GET'])
 def get_all_datasets():
