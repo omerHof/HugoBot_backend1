@@ -696,14 +696,11 @@ def get_tim1():
 @app.route('/getDISC', methods=['POST'])
 @token_required
 def get_disc(current_user):
-    print("hi0")
     data = request.form
     disc_id = data["disc_id"]
     disc = discretization.query.filter_by(id=disc_id).first()
-    print("hi1")
-    if check_for_bad_user_disc(disc, current_user.Email):
-        return jsonify({'message': 'dont try to fool me, you dont own it!'}), 400
-    print("hi2")
+    # if check_for_bad_user_disc(disc, current_user.Email):
+    #     return jsonify({'message': 'dont try to fool me, you dont own it!'}), 400
     dataset = disc.dataset.Name
     return send_file(dataset + '/' + disc_id + '/states.csv')
 
@@ -732,7 +729,7 @@ def add_TIM():
         else:
             epsilon = int(data['Epsilon'])
         max_gap = int(data['Max Gap'])
-        verticale_support = int(data['min_ver_support'])
+        verticale_support = int(data['min_ver_support']) / 100
         num_relations = int(data['num_relations'])
         max_tirp_length = int(data['max Tirp Length'])
         index_same = str(data['index_same'])
@@ -775,8 +772,8 @@ def add_TIM():
                                                             max_tirp_length=max_tirp_length, num_comma=2,
                                                             entity_ids_num=entity_ids_num,
                                                             semicolon_end=semicolon_end, need_one_sized=need_one_sized)
-                if not print_output_incrementally:
-                    lego_0.print_frequent_tirps(out_path)
+                # if not print_output_incrementally:
+                lego_0.print_frequent_tirps(out_path)
             else:
                 continue
         KL = karma_lego(id=KL_id, epsilon=epsilon, min_ver_support=verticale_support, num_relations=num_relations,

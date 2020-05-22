@@ -1,0 +1,5 @@
+StateID,TemporalPropertyID,BinID,BinLow,BinHigh,BinLowScore
+1,1,0,-inf,0.40284999999999993,
+2,1,1,0.40284999999999993,inf,
+3,999,0,-inf,4.5,
+4,999,1,4.5,inf,
