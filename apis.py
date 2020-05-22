@@ -29,7 +29,7 @@ def empty_string():
     return ""
 
 
-SERVER_ROOT = "C:/Users/yonatan/PycharmProjects/HugoBotServer"
+SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
 RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
 VMAP_HEADER_FORMAT = ["Variable ID", "Variable Name", "Description"]
 HUGOBOT_EXECUTABLE_PATH = "HugoBot-beta-release-v1.1.5_03-01-2020/cli.py"
@@ -720,6 +720,13 @@ def get_tim1():
     return send_file("C:/Users/Raz/PycharmProjects/hello.zip")
 
 
+def create_disc_zip(disc_path, zip_name, files_to_zip):
+    with zipfile.ZipFile(os.path.join(disc_path, zip_name), mode='w') as zipped_disc:
+        for file in files_to_zip:
+            file_path = os.path.join(disc_path, file)
+            zipped_disc.write(file_path, os.path.basename(file_path))
+
+
 @app.route('/getDISC', methods=['POST'])
 @token_required
 def get_disc(current_user):
@@ -729,7 +736,20 @@ def get_disc(current_user):
     # if check_for_bad_user_disc(disc, current_user.Email):
     #     return jsonify({'message': 'dont try to fool me, you dont own it!'}), 400
     dataset = disc.dataset.Name
-    return send_file(dataset + '/' + disc_id + '/states.csv')
+
+    disc_path = os.path.join(SERVER_ROOT, dataset, disc_id)
+
+    disc_zip_name = "discretization.zip"
+
+    files_to_send = ["entity-class-relations.csv",
+                     "KL.txt",
+                     "prop-data.csv",
+                     "states.csv",
+                     "symbolic-time-series.csv"]
+
+    create_disc_zip(disc_path, disc_zip_name, files_to_send)
+
+    return send_file(os.path.join(disc_path, disc_zip_name))
 
 
 def check_if_not_int(num):
@@ -1209,6 +1229,18 @@ def get_kl_file():
         return send_file(dataset_name + '/' + disc_name + '/' + 'KL.txt'), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request KarmaLego output file cannot be found.'}), 404
+
+
+@app.route("/getExampleFile", methods=["GET"])
+def get_example_file():
+    try:
+        file_name = request.args.get("file")
+        print(file_name)
+        file_path = os.path.join(SERVER_ROOT, "Resources", file_name+'.csv')
+        print(file_path)
+        return send_file(file_path), 200
+    except FileNotFoundError:
+        return jsonify({'message': 'the request file cannot be found.'}), 404
 
 
 if __name__ == '__main__':
