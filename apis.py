@@ -247,9 +247,21 @@ def ask_permission(current_user):
     try:
         dataset_name = request.args.get('dataset')
         dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
+        owner_email = dataset.owner.Email
+        print("\"" + owner_email + "\"")
+        print("\"" + current_user.Email + "\"")
+        print("\"" + dataset_name + "\"")
         ask = ask_permissions(owner=current_user, dataset=dataset)
         db.session.add(ask)
         db.session.commit()
+        try:
+            notify_by_email.send_an_email(
+                message=f"Subject: A user with the email " + current_user.Email
+                        + " has asked for permission to use \""
+                        + dataset_name + "\"",
+                receiver_email=owner_email)
+        except:
+            return jsonify({'message': 'cannot send an email!'}), 409
         db.session.close()
         return jsonify({'message': 'permission asked!'})
     except:
@@ -349,7 +361,9 @@ def accept_permission(current_user):
         db.session.delete(record)
         db.session.commit()
         db.session.close()
-        notify_by_email.send_an_email(message=f"Subject: you got permission for dataset "+dataset_name,receiver_email=user_email)
+        notify_by_email.send_an_email(
+            message=f"Subject: You got permission for Dataset "+dataset_name,
+            receiver_email=user_email)
         return jsonify({'message': 'permission accepted!'})
     except:
         return jsonify({'message': 'there has been an error!'}), 500
@@ -372,6 +386,9 @@ def reject_permission(current_user):
         db.session.delete(record)
         db.session.commit()
         db.session.close()
+        notify_by_email.send_an_email(
+            message=f"Subject: Your permission request for Dataset "+dataset_name + " was rejected",
+            receiver_email=user_email)
         return jsonify({'message': 'permission accepted!'})
     except:
         return jsonify({'message': 'there has been an error!'}), 500
@@ -713,11 +730,6 @@ def get_TIM():
     except:
         db.session.close()
         return jsonify({'message': 'there is no such file to download'}), 404
-
-
-@app.route('/getTIM1', methods=['GET', 'POST'])
-def get_tim1():
-    return send_file("C:/Users/Raz/PycharmProjects/hello.zip")
 
 
 def create_disc_zip(disc_path, zip_name, files_to_zip):
@@ -1224,9 +1236,9 @@ def get_kl_file():
         print(dataset_name)
         disc_name = request.args.get("disc_id")
         print(disc_name)
-        # kl_name = request.args.get("disc_id")
-        # print(kl_name)
-        return send_file(dataset_name + '/' + disc_name + '/' + 'KL.txt'), 200
+        kl_name = request.args.get("kl_id")
+        print(kl_name)
+        return send_file(dataset_name + '/' + disc_name + '/' + kl_name + '/KL.txt'), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request KarmaLego output file cannot be found.'}), 404
 
