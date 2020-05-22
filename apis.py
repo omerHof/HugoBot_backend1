@@ -32,6 +32,8 @@ def empty_string():
 SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
 RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
 VMAP_HEADER_FORMAT = ["Variable ID", "Variable Name", "Description"]
+GRADIENT_HEADER_FORMAT = ["StateID", "TemporalPropertyID", "Method", "BinID", "BinLow", "BinHigh", "BinLowScore"]
+KB_HEADER_FORMAT = ["StateID", "TemporalPropertyID", "Method", "BinID", "BinLow", "BinHigh"]
 HUGOBOT_EXECUTABLE_PATH = "HugoBot-beta-release-v1.1.5_03-01-2020/cli.py"
 CLI_PATH = SERVER_ROOT + '/' + HUGOBOT_EXECUTABLE_PATH
 MODE = "temporal-abstraction"
@@ -560,7 +562,46 @@ def validate_id_integrity(raw_data_path, vmap_path):
 
 def validate_entity_id_integrity(raw_data_path, entity_path):
     raw_data_entity_list = get_variable_list(raw_data_path, 0)
-    entity_list_entity_list = get_variable_list(entity_path, 0)
+    entity_list = get_variable_list(entity_path, 0)
+    return sorted(raw_data_entity_list) == sorted(entity_list)
+
+
+def validate_gradient_file_header(gradient_file_path):
+    with open(gradient_file_path) as gradient_file:
+        reader = csv.reader(gradient_file, delimiter=',')
+        for header in islice(reader, 0, 1):
+
+            # solves a utf-8-bom encoding issue where ï»¿ gets added in the beginning of .csv files.
+            state_id_to_compare = header[0].replace("ï»¿", "")
+
+            if len(header) <= 7 and state_id_to_compare == GRADIENT_HEADER_FORMAT[0]:
+                if header[1] == GRADIENT_HEADER_FORMAT[1]:
+                    if header[2] == GRADIENT_HEADER_FORMAT[2]:
+                        if header[3] == GRADIENT_HEADER_FORMAT[3]:
+                            if header[4] == GRADIENT_HEADER_FORMAT[4]:
+                                if header[5] == GRADIENT_HEADER_FORMAT[5]:
+                                    if len(header) == 6 or header[6] == GRADIENT_HEADER_FORMAT[6]:
+                                        return True
+            return False
+
+
+def validate_kb_file_header(kb_file_path):
+    with open(kb_file_path) as kb_file:
+        reader = csv.reader(kb_file, delimiter=',')
+        for header in islice(reader, 0, 1):
+
+            # solves a utf-8-bom encoding issue where ï»¿ gets added in the beginning of .csv files.
+            state_id_to_compare = header[0].replace("ï»¿", "")
+
+            if len(header) == 6:
+                if state_id_to_compare == GRADIENT_HEADER_FORMAT[0]:
+                    if header[1] == GRADIENT_HEADER_FORMAT[1]:
+                        if header[2] == GRADIENT_HEADER_FORMAT[2]:
+                            if header[3] == GRADIENT_HEADER_FORMAT[3]:
+                                if header[4] == GRADIENT_HEADER_FORMAT[4]:
+                                    if header[5] == GRADIENT_HEADER_FORMAT[5]:
+                                        return True
+            return False
 
 
 @app.route('/addNewDisc', methods=['POST'])
