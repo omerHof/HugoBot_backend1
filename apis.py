@@ -29,7 +29,7 @@ def empty_string():
     return ""
 
 
-SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
+SERVER_ROOT = "C:/Users/yonatan/PycharmProjects/HugoBotServer"
 RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
 VMAP_HEADER_FORMAT = ["Variable ID", "Variable Name", "Description"]
 HUGOBOT_EXECUTABLE_PATH = "HugoBot-beta-release-v1.1.5_03-01-2020/cli.py"
@@ -145,9 +145,13 @@ def token_required(f):
 
 
 def check_for_authorization(current_user, dataset_name):
-    per = Permissions.query.filter_by(name_of_dataset=dataset_name).first()
+    per = Permissions.query.filter_by(name_of_dataset=dataset_name, Email=current_user.Email).first()
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
-    if (per is None or current_user.Email != per.owner.Email) and (dataset.owner.Email != current_user.Email):
+
+    if((dataset.public_private=="public")):
+        return False
+
+    if ((per is None or current_user.Email != per.owner.Email) and (dataset.owner.Email != current_user.Email)):
         return True
     else:
         return False
@@ -204,7 +208,6 @@ def get_data_on_dataset(current_user):
                 x = x + 1
         to_return = {"disc": disc_to_return, "karma": karma_to_return}
         db.session.close()
-        print(to_return)
         return jsonify(to_return)
     except:
         db.session.close()
@@ -315,7 +318,8 @@ def load_mail(current_user):
                                                 "Category": curr_dataset.category,
                                                 "PublicPrivate": curr_dataset.public_private}
                 counter = counter + 1
-            x = x + 1
+                x = x + 1
+        print(to_return["approve"])
         to_return["approveLen"] = counter
 
         to_return['Email'] = current_user.Email
@@ -345,6 +349,7 @@ def accept_permission(current_user):
         db.session.delete(record)
         db.session.commit()
         db.session.close()
+        notify_by_email.send_an_email(message=f"Subject: you got permission for dataset "+dataset_name,receiver_email=user_email)
         return jsonify({'message': 'permission accepted!'})
     except:
         return jsonify({'message': 'there has been an error!'}), 500
@@ -712,13 +717,21 @@ def check_if_not_int(num):
     else:
         return True
 
+def check_if_not_int_but_0(num):
+    num1 = float(num)
+    if num1.is_integer() and num1 > -1:
+        return False
+    else:
+        return True
 
 @app.route('/addTIM', methods=['POST'])
-def add_TIM():
+@token_required
+def add_TIM(current_user):
     try:
         data = request.form
-        print(data['Epsilon'])
-        if check_if_not_int(data['Epsilon']) or check_if_not_int(data['max Tirp Length']) or check_if_not_int(
+        if check_if_not_int_but_0(data['Epsilon']):
+            return jsonify({'message': 'you did not give me an integer but a float'}), 404
+        if check_if_not_int(data['max Tirp Length']) or check_if_not_int(
                 data['Max Gap']) or check_if_not_int(data['min_ver_support']):
             return jsonify({'message': 'you did not give me an integer but a float or a number less then 1'}), 404
         if int(data['min_ver_support']) > 100:
@@ -740,7 +753,7 @@ def add_TIM():
         print(index_same)
         print(epsilon)
         disc = discretization.query.filter_by(id=discretization_id).first()
-        email = disc.dataset.owner.Email
+        email = current_user.Email
         if check_exists(disc, epsilon, max_gap, verticale_support, num_relations, index_same, max_tirp_length):
             return jsonify({'message': 'already exists!'}), 409
         dataset_name = get_dataset_name(disc)
@@ -776,19 +789,26 @@ def add_TIM():
                 lego_0.print_frequent_tirps(out_path)
             else:
                 continue
-        KL = karma_lego(id=KL_id, epsilon=epsilon, min_ver_support=verticale_support, num_relations=num_relations,
-                        max_gap=max_gap, max_tirp_length=max_tirp_length, index_same=index_same, discretization=disc)
-        db.session.add(KL)
-        db.session.commit()
-        db.session.close()
+        if((os.path.exists(SERVER_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL.txt'))
+                or (os.path.exists(SERVER_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL-class-0.0.txt'))
+                or (os.path.exists(SERVER_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL-class-1.0.txt'))):
+            KL = karma_lego(id=KL_id, epsilon=epsilon, min_ver_support=verticale_support, num_relations=num_relations,
+                            max_gap=max_gap, max_tirp_length=max_tirp_length, index_same=index_same,
+                            discretization=disc)
+            db.session.add(KL)
+            db.session.commit()
+            notify_by_email.send_an_email(message=f"Subject: karmalego successfully created", receiver_email=email)
+            db.session.close()
+            return jsonify({'message': 'karmalego created!', 'KL_id': KL_id}), 200
+        else:
+            db.session.close()
+            notify_by_email.send_an_email(message=f"Subject: problem with creating karmalego", receiver_email=email)
+            return jsonify({'message': 'did not create karmalego):'}), 409
     except:
         db.session.close()
         return jsonify({'message': 'problem with data'}), 404
-    try:
-        # notify_by_email.send_an_email(message=f"Subject: karmalego created succsesfuly", receiver_email=email)
-        return jsonify({'message': 'karmalego created!', 'KL_id': KL_id}), 200
-    except:
-        return jsonify({'message': 'cant send an email!'}), 409
+
+
 
 
 # post reqeust that gets a json with 'Email',
@@ -797,6 +817,8 @@ def add_TIM():
 def create_user():
     try:
         data = request.form
+        if(check_email.check(data['Email'])):
+            return jsonify({'message': 'email is not valid'}), 400
         double_user = Users.query.filter_by(Email=data['Email']).first()
         if double_user:
             db.session.close()
@@ -808,6 +830,7 @@ def create_user():
                          FName=data['Fname'])
         db.session.add(new_user)
         db.session.commit()
+        notify_by_email.send_an_email(message=f"Subject: registration successfully completed", receiver_email=data['Email'])
     except:
         db.session.rollback()
         db.session.close()
@@ -825,9 +848,10 @@ def login():
     if 'Email' not in data or 'Password' not in data:
         return make_response('you didnt give me Email or Password', 400)
     user = Users.query.filter_by(Email=data['Email']).first()
+    print(user)
     if not user:
         db.session.close()
-        return make_response({'message': 'user or password is not correct'}, 400)
+        return make_response({'message': 'Email is not correct'}, 400)
     if check_password_hash(user.Password, data['Password']):
         token = jwt.encode(
             {'Email': user.Email, 'exp': (datetime.datetime.utcnow() + datetime.timedelta(minutes=3000))},
@@ -836,7 +860,7 @@ def login():
         return jsonify({'token': token.decode('UTF-8')})
     else:
         db.session.close()
-        return jsonify({'message': 'problem with data 1'}), 400
+        return jsonify({'message': 'wrong password'}), 400
     # except:
     #     db.session.close()
     #     return jsonify({'message': 'problem with data 2'}), 400

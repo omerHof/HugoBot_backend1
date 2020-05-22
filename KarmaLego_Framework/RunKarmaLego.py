@@ -36,8 +36,10 @@ def runKarmaLego(time_intervals_path, min_ver_support, num_relations, max_gap, l
     :return: lego and karma structs
     """
     st = time.time()
+    print("helooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo")
     karma = Karma(min_ver_support=min_ver_support, num_relations=num_relations, max_gap=max_gap, label=label,
                   selected_variables=selected_variables, epsilon= epsilon)
+    print("helooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo")
     karma.fit(file_path=time_intervals_path, num_comma=num_comma, index_same=index_same,
               skip_followers=skip_followers, symbol_type=symbol_type, entity_ids_num=entity_ids_num,
               semicolon_end=semicolon_end, calc_offsets=calc_offsets,
