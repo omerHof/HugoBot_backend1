@@ -4,6 +4,7 @@ import csv
 import datetime
 # import json
 import jwt
+import filecmp
 from flask import Flask, request, jsonify, make_response, send_file
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -38,13 +39,14 @@ HUGOBOT_EXECUTABLE_PATH = "HugoBot-beta-release-v1.1.5_03-01-2020/cli.py"
 CLI_PATH = SERVER_ROOT + '/' + HUGOBOT_EXECUTABLE_PATH
 MODE = "temporal-abstraction"
 DATASET_OR_PROPERTY = "per-property"
+KB_PREFIX = "-s"
 ABSTRACTION_METHOD_CONVERSION = {'Equal Frequency': 'equal-frequency',
                                  'Equal Width': 'equal-width',
                                  'SAX': 'sax',
                                  'Persist': 'persist',
                                  'KMeans': 'kmeans',
-                                 'Knowledge-Based': 'knowledge-based',
-                                 'Gradient': 'gradient',
+                                 'Knowledge-Based (by Value)': 'knowledge-based',
+                                 'Knowledge-Based (by Gradient)': 'gradient',
                                  'TD4C-SKL': 'td4c-skl',
                                  'TD4C-Entropy': 'td4c-entropy',
                                  'TD4C-Entropy-IG': 'td4c-entropy-ig',
@@ -585,6 +587,44 @@ def validate_gradient_file_header(gradient_file_path):
             return False
 
 
+def validate_gradient_file_body(gradient_file_path):
+    with open(gradient_file_path) as gradient_file:
+        reader = csv.reader(gradient_file, delimiter=',')
+
+        i = 0
+        flag = True
+        for row in reader:
+            if i == 0:
+                i = i + 1
+                continue
+
+            flag &= check_non_negative_int(row[0])
+            flag &= check_non_negative_int(row[1])
+            flag &= (row[2] == "gradient")
+            flag &= check_non_negative_int(row[3])
+            flag &= check_float(row[4]) and (float(row[4]) >= -90) and (float(row[4]) <= 90)
+            flag &= check_float(row[5]) and (float(row[5]) >= -90) and (float(row[5]) <= 90)
+
+            i = i + 1
+
+    return flag
+
+
+def validate_uniqueness(dataset_path, file_name, path_to_exclude):
+    walker = os.walk(dataset_path)
+    existing_discs = [x[1] for x in walker][0]
+
+    for disc in existing_discs:
+        disc_path = os.path.join(dataset_path, disc)
+        path_to_compare = os.path.join(disc_path, file_name)
+        if path_to_compare == path_to_exclude:  # of course the file is equal to itself
+            continue
+        if filecmp.cmp(path_to_exclude, path_to_compare):
+            return False
+
+    return True
+
+
 def validate_kb_file_header(kb_file_path):
     with open(kb_file_path) as kb_file:
         reader = csv.reader(kb_file, delimiter=',')
@@ -604,58 +644,50 @@ def validate_kb_file_header(kb_file_path):
             return False
 
 
+def validate_kb_file_body(kb_file_path):
+    with open(kb_file_path) as kb_file:
+        reader = csv.reader(kb_file, delimiter=',')
+
+        i = 0
+        flag = True
+        for row in reader:
+            if i == 0:
+                i = i + 1
+                continue
+
+            flag &= check_non_negative_int(row[0])
+            flag &= check_non_negative_int(row[1])
+            flag &= (row[2] == "knowledge-based")
+            flag &= check_non_negative_int(row[3])
+            flag &= check_float(row[4])
+            flag &= check_float(row[5])
+
+            i = i + 1
+
+    return flag
+
+
 @app.route('/addNewDisc', methods=['POST'])
 @token_required
 def add_new_disc(current_user):
+    # retrieve user input from request
     data = request.form
     PAA = int(data['PAA'])
     AbMethod = str(data['AbMethod'])
     NumStates = int(data['NumStates'])
     InterpolationGap = int(data['InterpolationGap'])
     dataset_name = str(data["datasetName"])
-    binning = data["BinningByValue"]
-    if binning == 'true':
-        binning = True
-    else:
-        binning = False
+    binning = True
 
-    if 'GradientFile' not in data:
-        GradientFile = request.files["GradientFile"]
-        GradientFile.save(
-            os.path.join(SERVER_ROOT, secure_filename(GradientFile.filename)))
-        GradientFile_name = GradientFile.filename
-    else:
-        GradientFile_name = None
-    if 'KnowledgeBasedFile' not in data:
-        KnowledgeBasedFile = request.files["KnowledgeBasedFile"]
-        KnowledgeBasedFile.save(os.path.join(SERVER_ROOT, secure_filename(KnowledgeBasedFile.filename)))
-        KnowledgeBasedFile_name = KnowledgeBasedFile.filename
-    else:
-        KnowledgeBasedFile_name = None
-    dataset1 = info_about_datasets.query.filter_by(Name=dataset_name).first()
-    if check_if_already_exists(dataset1, PAA, AbMethod, NumStates, InterpolationGap, GradientFile_name,
-                               KnowledgeBasedFile_name):
-        return jsonify({'message': 'already exists!'}), 400
+    # generate a unique id for our new discretization
     disc_id = str(uuid.uuid4())
-    disc = discretization(binning_by_value=binning, id=disc_id, dataset=dataset1, PAA=PAA, AbMethod=AbMethod,
-                          NumStates=NumStates,
-                          InterpolationGap=InterpolationGap, GradientFile_name=GradientFile_name,
-                          KnowledgeBasedFile_name=KnowledgeBasedFile_name)
-    db.session.add(disc)
-    db.session.commit()
+
+    config = defaultdict(empty_string)
+
+    dataset_path = os.path.join(SERVER_ROOT, dataset_name)
+    disc_path = os.path.join(dataset_path, disc_id)
+
     create_directory_disc(dataset_name, disc_id)
-    db.session.close()
-
-    # temporal-abstraction 'Path to dataset file' 'Path to output dir' per-property
-    # -s (when using Gradient or KnowledgeBased) 'Path to states file' (when using Gradient or KnowledgeBased)
-    # 'Path to Preprocessing file' 'Path to Temporal Abstraction file'
-
-    # dataset_name = "sepsis"
-    # disc_id = "119d401c-7109-4710-9a7d-a2c4f82ece78"
-    dataset_path = SERVER_ROOT + '/' + dataset_name
-    disc_path = SERVER_ROOT + '/' + dataset_name + '/' + disc_id
-
-    # create preprocessing and temporal abstraction files from user input
 
     # retrieve temporal property id list from vmap file
     temporal_variables = []
@@ -666,6 +698,87 @@ def add_new_disc(current_user):
             if counter > 0:
                 temporal_variables.append(row.split(',')[0])
             counter = counter + 1
+
+    # if this is a gradient discretization, validate the file first
+    if 'GradientFile' in request.files.keys():
+        GradientFile = request.files['GradientFile']
+
+        GradientFile.filename = "states_kb_gradient.csv"
+        GradientFile_name = GradientFile.filename
+        gradient_path = os.path.join(disc_path, secure_filename(GradientFile.filename))
+        GradientFile.save(gradient_path)
+
+        if not validate_gradient_file_header(gradient_path):
+            os.remove(gradient_path)
+            os.rmdir(disc_path)
+            return jsonify({'message': 'the gradient file you supplied has an incorrect header.'}), 400
+
+        if not validate_gradient_file_body(gradient_path):
+            os.remove(gradient_path)
+            os.rmdir(disc_path)
+            return jsonify({'message': 'the gradient file you supplied has incorrect data.'}), 400
+
+        if not validate_uniqueness(dataset_path, GradientFile_name, gradient_path):
+            os.remove(gradient_path)
+            os.rmdir(disc_path)
+            return jsonify({'message': 'the same gradient file already exists in the system'}), 400
+
+        # Set NumStates and InterpolationGap's values in the DB to 0
+        # This is to signify that they aren't the same across all temporal properties.
+        NumStates = 0
+        InterpolationGap = 0
+        config["kb_flag"] = " " + KB_PREFIX
+        config["states_file"] = gradient_path
+    else:
+        GradientFile_name = None
+
+    # if this is a knowledge-based discretization (by value), we also need to validate the file first
+    if 'KnowledgeBasedFile' in request.files.keys():
+        KnowledgeBasedFile = request.files['GradientFile']
+
+        KnowledgeBasedFile.filename = "states_knowledge_based.csv"
+        KnowledgeBasedFile_name = KnowledgeBasedFile.filename
+        kb_path = os.path.join(disc_path, secure_filename(KnowledgeBasedFile.filename))
+        KnowledgeBasedFile.save(kb_path)
+
+        if not validate_kb_file_header(kb_path):
+            os.remove(kb_path)
+            os.rmdir(disc_path)
+            return jsonify({'message': 'the knowledge-based file you supplied has an incorrect data'}), 400
+
+        if not validate_kb_file_body(kb_path):
+            os.remove(kb_path)
+            os.rmdir(disc_path)
+            return jsonify({'message': 'the knowledge-based file you supplied has incorrect fields.'}), 400
+
+        if not validate_uniqueness(dataset_path, KnowledgeBasedFile_name, kb_path):
+            os.remove(kb_path)
+            os.rmdir(disc_path)
+            return jsonify({'message': 'the same knowledge-based file already exists in the system'}), 400
+
+        # Set NumStates and InterpolationGap's values in the DB to 0
+        # This is to signify that they aren't the same across all temporal properties.
+        NumStates = 0
+        InterpolationGap = 0
+        config["kb_flag"] = " " + KB_PREFIX
+        config["states_file"] = kb_path
+    else:
+        KnowledgeBasedFile_name = None
+
+    dataset1 = info_about_datasets.query.filter_by(Name=dataset_name).first()
+
+    # now we need to check if we haven't seen this discretization before
+    # kb excluded because we already verified the configuration's uniqueness
+    if 'GradientFile' not in request.files.keys() and 'KnowledgeBasedFile' not in request.files.keys():
+        if check_if_already_exists(dataset1, PAA, AbMethod, NumStates, InterpolationGap, GradientFile_name,
+                                   KnowledgeBasedFile_name):
+            return jsonify({'message': 'already exists!'}), 400
+
+    # temporal-abstraction 'Path to dataset file' 'Path to output dir' per-property
+    # -s (when using Gradient or KnowledgeBased) 'Path to states file' (when using Gradient or KnowledgeBased)
+    # 'Path to Preprocessing file' 'Path to Temporal Abstraction file'
+
+    # create preprocessing and temporal abstraction files from user input
 
     preprocessing_path = disc_path + '/' + 'preprocessing.csv'
     with open(preprocessing_path, 'w', newline='') as preprocessing:
@@ -682,7 +795,23 @@ def add_new_disc(current_user):
             ab_method_code = ABSTRACTION_METHOD_CONVERSION[AbMethod]
             writer.writerow([variable, ab_method_code, NumStates])
 
-    config = defaultdict(empty_string)
+    disc = discretization(PAA=PAA,
+                          id=disc_id,
+                          dataset=dataset1,
+                          AbMethod=AbMethod,
+                          NumStates=NumStates,
+                          binning_by_value=binning,
+                          InterpolationGap=InterpolationGap,
+                          GradientFile_name=GradientFile_name,
+                          KnowledgeBasedFile_name=KnowledgeBasedFile_name)
+    db.session.add(disc)
+    db.session.commit()
+    db.session.close()
+
+    # os.path.join() won't work here
+    dataset_path = SERVER_ROOT + '/' + dataset_name
+    disc_path = SERVER_ROOT + '/' + dataset_name + '/' + disc_id
+
     config["cli_path"] = " " + CLI_PATH
     config["dataset_or_property"] = " " + DATASET_OR_PROPERTY
     config["mode"] = " " + MODE
@@ -707,6 +836,8 @@ def run_hugobot(config):
     command += config["dataset_path"]
     command += config["output_dir"]
     command += config["dataset_or_property"]
+    command += config["kb_flag"]
+    command += config["states_file"]
     command += config["max_gap"]
     command += config["discretization"]
     command += config["abstraction_method"]
@@ -1294,6 +1425,20 @@ def get_example_file():
         return send_file(file_path), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request file cannot be found.'}), 404
+
+
+@app.route("/getRazTest", methods=["GET"])
+def get_raz_test():
+    path1 = os.path.join(SERVER_ROOT, "Gesture_RAW_DATA.csv")
+    path2 = "C://Users/Raz/Desktop/Gesture_RAW_DATA.csv"
+    walker = os.walk(os.path.join(SERVER_ROOT,"RazshtData"))
+    dirs = [x[1] for x in walker][0]
+
+    with open(path1) as file1:
+        with open(path2) as file2:
+            comparison = filecmp.cmp(path1, path2)
+            return jsonify({'message': comparison,
+                            'message2': dirs}), 200
 
 
 if __name__ == '__main__':
