@@ -31,6 +31,7 @@ def empty_string():
 
 
 SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
+DATASETS_ROOT = SERVER_ROOT + '/Datasets'
 RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
 VMAP_HEADER_FORMAT = ["Variable ID", "Variable Name", "Description"]
 GRADIENT_HEADER_FORMAT = ["StateID", "TemporalPropertyID", "Method", "BinID", "BinLow", "BinHigh", "BinLowScore"]
@@ -686,7 +687,7 @@ def add_new_disc(current_user):
 
     config = defaultdict(empty_string)
 
-    dataset_path = os.path.join(SERVER_ROOT, dataset_name)
+    dataset_path = os.path.join(DATASETS_ROOT, dataset_name)
     disc_path = os.path.join(dataset_path, disc_id)
 
     create_directory_disc(dataset_name, disc_id)
@@ -817,8 +818,8 @@ def add_new_disc(current_user):
     db.session.close()
 
     # os.path.join() won't work here
-    dataset_path = SERVER_ROOT + '/' + dataset_name
-    disc_path = SERVER_ROOT + '/' + dataset_name + '/' + disc_id
+    dataset_path = DATASETS_ROOT + '/' + dataset_name
+    disc_path = DATASETS_ROOT + '/' + dataset_name + '/' + disc_id
 
     config["cli_path"] = " " + CLI_PATH
     config["mode"] = " " + MODE
@@ -833,8 +834,6 @@ def add_new_disc(current_user):
 
     run_hugobot(config)
 
-    # with zipfile.ZipFile('somePath/bla2.zip', 'r') as zip_ref:
-    #    zip_ref.extractall('C:/Users/yonatan/PycharmProjects/HugoBotServer')
     return "success!"
 
 
@@ -908,7 +907,7 @@ def get_TIM():
         disc = KL.discretization.id
         dataset = KL.discretization.dataset.Name
         db.session.close()
-        return send_file(SERVER_ROOT + "/" + dataset + '/' + disc + '/' + kl_id + '/' + class_num)
+        return send_file(DATASETS_ROOT + "/" + dataset + '/' + disc + '/' + kl_id + '/' + class_num)
     except:
         db.session.close()
         return jsonify({'message': 'there is no such file to download'}), 404
@@ -931,7 +930,7 @@ def get_disc(current_user):
     #     return jsonify({'message': 'dont try to fool me, you dont own it!'}), 400
     dataset = disc.dataset.Name
 
-    disc_path = os.path.join(SERVER_ROOT, dataset, disc_id)
+    disc_path = os.path.join(DATASETS_ROOT, dataset, disc_id)
 
     states_file_name = "states.csv"  # first try finding a regular states file
 
@@ -961,7 +960,7 @@ def get_dataset_files(current_user):
 
     dataset_name = request.args.get('dataset_id')
 
-    dataset_path = os.path.join(SERVER_ROOT, dataset_name)
+    dataset_path = os.path.join(DATASETS_ROOT, dataset_name)
 
     if os.path.exists(dataset_path):
         files_to_send = [dataset_name + ".csv", "VMap.csv"]
@@ -1027,7 +1026,7 @@ def add_TIM(current_user):
         KL_id = str(uuid.uuid4())
         create_directory(dataset_name, discretization_id, KL_id)
         directory_path = dataset_name + "/" + discretization_id
-        for filename in os.listdir(SERVER_ROOT + '/' + directory_path):
+        for filename in os.listdir(DATASETS_ROOT + '/' + directory_path):
             if filename.endswith(".txt"):
                 start_time = time.time()
                 support_vec = verticale_support
@@ -1035,8 +1034,8 @@ def add_TIM(current_user):
                 max_gap = max_gap
                 epsilon = epsilon
                 max_tirp_length = max_tirp_length
-                path = SERVER_ROOT + '/' + directory_path + '/' + filename
-                out_path = SERVER_ROOT + '/' + directory_path + '/' + KL_id + '/' + filename
+                path = DATASETS_ROOT + '/' + directory_path + '/' + filename
+                out_path = DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + filename
                 print(out_path)
                 print_output_incrementally = True
                 entity_ids_num = 2
@@ -1056,9 +1055,9 @@ def add_TIM(current_user):
                 lego_0.print_frequent_tirps(out_path)
             else:
                 continue
-        if((os.path.exists(SERVER_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL.txt'))
-                or (os.path.exists(SERVER_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL-class-0.0.txt'))
-                or (os.path.exists(SERVER_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL-class-1.0.txt'))):
+        if((os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL.txt'))
+                or (os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL-class-0.0.txt'))
+                or (os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL-class-1.0.txt'))):
             KL = karma_lego(id=KL_id, epsilon=epsilon, min_ver_support=verticale_support, num_relations=num_relations,
                             max_gap=max_gap, max_tirp_length=max_tirp_length, index_same=index_same,
                             discretization=disc)
@@ -1193,7 +1192,7 @@ def upload_stepone(current_user):
 
     raw_data_file.filename = dataset_name + '.csv'
 
-    raw_data_path = os.path.join(SERVER_ROOT, dataset_name, secure_filename(raw_data_file.filename))
+    raw_data_path = os.path.join(DATASETS_ROOT, dataset_name, secure_filename(raw_data_file.filename))
 
     raw_data_file.save(raw_data_path)
 
@@ -1203,7 +1202,7 @@ def upload_stepone(current_user):
 
     if not validate_raw_data_header(raw_data_path):
         os.remove(raw_data_path)
-        os.rmdir(os.path.join(SERVER_ROOT, dataset_name))
+        os.rmdir(os.path.join(DATASETS_ROOT, dataset_name))
         return jsonify({'message': 'Either your Dataset\'s header is not in the correct format, '
                                    'or you have more than ' +
                                    str(len(RAW_DATA_HEADER_FORMAT)) +
@@ -1211,7 +1210,7 @@ def upload_stepone(current_user):
 
     if not validate_raw_data_body(raw_data_path):
         os.remove(raw_data_path)
-        os.rmdir(os.path.join(SERVER_ROOT, dataset_name))
+        os.rmdir(os.path.join(DATASETS_ROOT, dataset_name))
         return jsonify({'message': 'at least one row is not in the correct format'}), 400
 
     dataset1 = info_about_datasets(Name=dataset_name, Description=description, source=dataset_source,
@@ -1235,7 +1234,7 @@ def upload_steptwo(current_user):
         print(file)
         dataset_name = request.form['datasetName']
         print(dataset_name)
-        dataset_path = os.path.join(SERVER_ROOT, dataset_name)
+        dataset_path = os.path.join(DATASETS_ROOT, dataset_name)
         raw_data_path = os.path.join(dataset_path, dataset_name + '.csv')
         file.filename = "VMap.csv"
         vmap_path = os.path.join(dataset_path, secure_filename(file.filename))
@@ -1284,7 +1283,7 @@ def step_two_create(current_user):
         dataset_name = request.form['datasetName']
         print(dataset_name)
 
-        dataset_path = SERVER_ROOT + '/' + dataset_name
+        dataset_path = DATASETS_ROOT + '/' + dataset_name
         vmap_path = dataset_path + '/' + 'VMap.csv'
 
         with open(vmap_path, 'w', newline='') as vmap:
@@ -1311,10 +1310,10 @@ def upload_stepthree(current_user):
             dataset_name = request.form['datasetName']
             print(dataset_name)
 
-            dataset_path = os.path.join(SERVER_ROOT, dataset_name)
+            dataset_path = os.path.join(DATASETS_ROOT, dataset_name)
             raw_data_path = os.path.join(dataset_path, dataset_name + '.csv')
             file.filename = "Entities.csv"
-            entity_path = os.path.join(SERVER_ROOT, dataset_name, secure_filename(file.filename))
+            entity_path = os.path.join(DATASETS_ROOT, dataset_name, secure_filename(file.filename))
 
             file.save(entity_path)
 
@@ -1392,7 +1391,7 @@ def get_variable_list_request():
     try:
         dataset_name = request.args.get("dataset_id")
         print(dataset_name)
-        dataset_path = os.path.join(SERVER_ROOT, dataset_name, dataset_name + '.csv')
+        dataset_path = os.path.join(DATASETS_ROOT, dataset_name, dataset_name + '.csv')
         column_in_data = 1
         list_to_return = get_variable_list(dataset_path, column_in_data)
         list_to_return = [int(x) for x in list_to_return]
@@ -1466,24 +1465,6 @@ def get_example_file():
         return send_file(file_path), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request file cannot be found.'}), 404
-
-
-@app.route("/getRazTest", methods=["GET"])
-def get_raz_test():
-    path1 = os.path.join(SERVER_ROOT, "Gesture_RAW_DATA.csv")
-    path2 = "C://Users/Raz/Desktop/Gesture_RAW_DATA.csv"
-    walker = os.walk(os.path.join(SERVER_ROOT,"RazshtData"))
-    dirs = [x[1] for x in walker][0]
-
-    path = request.args.get('pathtest')
-    flag = os.path.exists(path)
-
-    with open(path1) as file1:
-        with open(path2) as file2:
-            comparison = filecmp.cmp(path1, path2)
-            return jsonify({'message': comparison,
-                            'message2': dirs,
-                            'message3': flag}), 200
 
 
 if __name__ == '__main__':
