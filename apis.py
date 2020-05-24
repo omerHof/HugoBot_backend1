@@ -619,6 +619,8 @@ def validate_uniqueness(dataset_path, file_name, path_to_exclude):
         path_to_compare = os.path.join(disc_path, file_name)
         if path_to_compare == path_to_exclude:  # of course the file is equal to itself
             continue
+        if not os.path.exists(path_to_compare):  # if the current disc is not a gradient/kb disc, then skip it
+            continue
         if filecmp.cmp(path_to_exclude, path_to_compare):
             return False
 
@@ -724,11 +726,14 @@ def add_new_disc(current_user):
             return jsonify({'message': 'the same gradient file already exists in the system'}), 400
 
         # Set NumStates and InterpolationGap's values in the DB to 0
+        # and PAA to 1 (1 = no-op)
         # This is to signify that they aren't the same across all temporal properties.
+        # In the case of PAA, the user already gave us a discretization
+        PAA = 1
         NumStates = 0
         InterpolationGap = 0
         config["kb_flag"] = " " + KB_PREFIX
-        config["states_file"] = gradient_path
+        config["states_file"] = " " + gradient_path
     else:
         GradientFile_name = None
 
@@ -757,11 +762,14 @@ def add_new_disc(current_user):
             return jsonify({'message': 'the same knowledge-based file already exists in the system'}), 400
 
         # Set NumStates and InterpolationGap's values in the DB to 0
+        # and PAA to 1 (1 = no-op)
         # This is to signify that they aren't the same across all temporal properties.
+        # In the case of PAA, the user already gave us a discretization
+        PAA = 1
         NumStates = 0
         InterpolationGap = 0
         config["kb_flag"] = " " + KB_PREFIX
-        config["states_file"] = kb_path
+        config["states_file"] = " " + kb_path
     else:
         KnowledgeBasedFile_name = None
 
@@ -769,31 +777,31 @@ def add_new_disc(current_user):
 
     # now we need to check if we haven't seen this discretization before
     # kb excluded because we already verified the configuration's uniqueness
+    # no need to make a temporal abstraction file either
     if 'GradientFile' not in request.files.keys() and 'KnowledgeBasedFile' not in request.files.keys():
         if check_if_already_exists(dataset1, PAA, AbMethod, NumStates, InterpolationGap, GradientFile_name,
                                    KnowledgeBasedFile_name):
             return jsonify({'message': 'already exists!'}), 400
 
-    # temporal-abstraction 'Path to dataset file' 'Path to output dir' per-property
-    # -s (when using Gradient or KnowledgeBased) 'Path to states file' (when using Gradient or KnowledgeBased)
-    # 'Path to Preprocessing file' 'Path to Temporal Abstraction file'
+        # temporal-abstraction 'Path to dataset file' 'Path to output dir' per-property
+        # -s (when using Gradient or KnowledgeBased) 'Path to states file' (when using Gradient or KnowledgeBased)
+        # 'Path to Preprocessing file' 'Path to Temporal Abstraction file'
 
-    # create preprocessing and temporal abstraction files from user input
+        # create preprocessing and temporal abstraction files from user input
+        preprocessing_path = disc_path + '/' + 'preprocessing.csv'
+        with open(preprocessing_path, 'w', newline='') as preprocessing:
+            writer = csv.writer(preprocessing, delimiter=',')
+            writer.writerow(['TemporalPropertyID', 'PAAWindowSize', 'StdCoefficient', 'MaxGap'])
+            for variable in temporal_variables:
+                writer.writerow([variable, str(PAA), '', '5'])
 
-    preprocessing_path = disc_path + '/' + 'preprocessing.csv'
-    with open(preprocessing_path, 'w', newline='') as preprocessing:
-        writer = csv.writer(preprocessing, delimiter=',')
-        writer.writerow(['TemporalPropertyID', 'PAAWindowSize', 'StdCoefficient', 'MaxGap'])
-        for variable in temporal_variables:
-            writer.writerow([variable, str(PAA), '', '5'])
-
-    temporal_abstraction_path = disc_path + '/' + 'temporal_abstraction.csv'
-    with open(temporal_abstraction_path, 'w', newline='') as temporal_abstraction:
-        writer = csv.writer(temporal_abstraction, delimiter=',')
-        writer.writerow(['TemporalPropertyID', 'Method', 'NbBins', 'GradientWindowSize'])
-        for variable in temporal_variables:
-            ab_method_code = ABSTRACTION_METHOD_CONVERSION[AbMethod]
-            writer.writerow([variable, ab_method_code, NumStates])
+        temporal_abstraction_path = disc_path + '/' + 'temporal_abstraction.csv'
+        with open(temporal_abstraction_path, 'w', newline='') as temporal_abstraction:
+            writer = csv.writer(temporal_abstraction, delimiter=',')
+            writer.writerow(['TemporalPropertyID', 'Method', 'NbBins', 'GradientWindowSize'])
+            for variable in temporal_variables:
+                ab_method_code = ABSTRACTION_METHOD_CONVERSION[AbMethod]
+                writer.writerow([variable, ab_method_code, NumStates])
 
     disc = discretization(PAA=PAA,
                           id=disc_id,
@@ -813,13 +821,15 @@ def add_new_disc(current_user):
     disc_path = SERVER_ROOT + '/' + dataset_name + '/' + disc_id
 
     config["cli_path"] = " " + CLI_PATH
-    config["dataset_or_property"] = " " + DATASET_OR_PROPERTY
     config["mode"] = " " + MODE
+    config["dataset_or_property"] = " " + "per-dataset"
     config["dataset_path"] = " " + dataset_path + '/' + dataset_name + ".csv"
     config["output_dir"] = " " + disc_path
     config["output_dir_name"] = " " + disc_id
-    config["preprocessing_path"] = " " + disc_path + '/' + "preprocessing.csv"
-    config["temporal_abstraction_path"] = " " + disc_path + '/' + "temporal_abstraction.csv"
+    if 'GradientFile' not in request.files.keys() and 'KnowledgeBasedFile' not in request.files.keys():
+        config["dataset_or_property"] = " " + DATASET_OR_PROPERTY
+        config["preprocessing_path"] = " " + disc_path + '/' + "preprocessing.csv"
+        config["temporal_abstraction_path"] = " " + disc_path + '/' + "temporal_abstraction.csv"
 
     run_hugobot(config)
 
@@ -923,17 +933,48 @@ def get_disc(current_user):
 
     disc_path = os.path.join(SERVER_ROOT, dataset, disc_id)
 
+    states_file_name = "states.csv"  # first try finding a regular states file
+
+    if not os.path.exists(os.path.join(disc_path, states_file_name)):
+        states_file_name = "states_kb_gradient.csv"  # try gradient
+        if not os.path.exists(os.path.join(disc_path, states_file_name)):
+            states_file_name = "states_kb.csv"  # try knowledge-based
+            if not os.path.exists(os.path.join(disc_path, states_file_name)):
+                return jsonify({'message': 'cannot find the requested states file in the server'}), 500
+
     disc_zip_name = "discretization.zip"
 
     files_to_send = ["entity-class-relations.csv",
                      "KL.txt",
                      "prop-data.csv",
-                     "states.csv",
+                     states_file_name,
                      "symbolic-time-series.csv"]
 
     create_disc_zip(disc_path, disc_zip_name, files_to_send)
 
     return send_file(os.path.join(disc_path, disc_zip_name))
+
+
+@app.route('/getDatasetFiles', methods=['GET'])
+@token_required
+def get_dataset_files(current_user):
+
+    dataset_name = request.args.get('dataset_id')
+
+    dataset_path = os.path.join(SERVER_ROOT, dataset_name)
+
+    if os.path.exists(dataset_path):
+        files_to_send = [dataset_name + ".csv", "VMap.csv"]
+        if os.path.exists(os.path.join(dataset_path, "Entities.csv")):
+            files_to_send.append("Entities.csv")
+    else:
+        return jsonify({'message': 'cannot find the requested data file in the server'}), 500
+
+    data_zip_name = dataset_name + ".zip"
+
+    create_disc_zip(dataset_path, data_zip_name, files_to_send)
+
+    return send_file(os.path.join(dataset_path, data_zip_name))
 
 
 def check_if_not_int(num):
@@ -1434,11 +1475,15 @@ def get_raz_test():
     walker = os.walk(os.path.join(SERVER_ROOT,"RazshtData"))
     dirs = [x[1] for x in walker][0]
 
+    path = request.args.get('pathtest')
+    flag = os.path.exists(path)
+
     with open(path1) as file1:
         with open(path2) as file2:
             comparison = filecmp.cmp(path1, path2)
             return jsonify({'message': comparison,
-                            'message2': dirs}), 200
+                            'message2': dirs,
+                            'message3': flag}), 200
 
 
 if __name__ == '__main__':
