@@ -1383,7 +1383,7 @@ def get_all_info_on_dataset():
 def get_raw_data_file():
     dataset_name = request.args.get("id")
     print(dataset_name)
-    return send_file(dataset_name + '/' + dataset_name + '.csv'), 200
+    return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + dataset_name + '.csv'), 200
 
 
 @app.route("/getVariableList", methods=["GET"])
@@ -1407,16 +1407,9 @@ def get_vmap_file():
     try:
         dataset_name = request.args.get("id")
         print(dataset_name)
-        return send_file(dataset_name + '/' + 'VMap.csv'), 200
+        return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + 'VMap.csv'), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request VMap file cannot be found.'}), 404
-
-
-# @app.route("/getVMapFile", methods=["GET"])
-# def get_vmap_file():
-#     dataset_name = request.args.get("id")
-#     print(dataset_name)
-#     return send_file(dataset_name + '/' + 'VMap.csv'), 200
 
 
 @app.route("/getEntitiesFile", methods=["GET"])
@@ -1424,7 +1417,7 @@ def get_entities_file():
     try:
         dataset_name = request.args.get("id")
         print(dataset_name)
-        return send_file(dataset_name + '/' + 'Entities.csv'), 200
+        return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + 'Entities.csv'), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request Entities file cannot be found.'}), 404
 
@@ -1436,7 +1429,7 @@ def get_states_file():
         print(dataset_name)
         disc_name = request.args.get("disc_id")
         print(disc_name)
-        return send_file(dataset_name + '/' + disc_name + '/' + 'states.csv'), 200
+        return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + disc_name + '/' + 'states.csv'), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request States file cannot be found.'}), 404
 
@@ -1450,7 +1443,7 @@ def get_kl_file():
         print(disc_name)
         kl_name = request.args.get("kl_id")
         print(kl_name)
-        return send_file(dataset_name + '/' + disc_name + '/' + kl_name + '/KL.txt'), 200
+        return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + disc_name + '/' + kl_name + '/KL.txt'), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request KarmaLego output file cannot be found.'}), 404
 
