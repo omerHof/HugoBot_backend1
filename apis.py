@@ -2,14 +2,13 @@ import check_email
 from collections import defaultdict
 import csv
 import datetime
-# import json
-import jwt
 import filecmp
 from flask import Flask, request, jsonify, make_response, send_file
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from functools import wraps
 from itertools import islice
+import jwt
 from KarmaLego_Framework import RunKarmaLego
 import notify_by_email
 import os
@@ -112,7 +111,7 @@ class discretization(db.Model):
     InterpolationGap = db.Column(db.Integer, nullable=False)
     KnowledgeBasedFile_name = db.Column(db.String(120))
     GradientFile_name = db.Column(db.String(120))
-    binning_by_value = db.Column(db.Boolean, nullable=False)
+    GradientWindowSize = db.Column(db.Integer, nullable=False)
     karma_lego = db.relationship('karma_lego', backref='discretization', lazy='subquery')
     dataset_Name = db.Column(db.String(150), db.ForeignKey('info_about_datasets.Name'), nullable=False)
 
@@ -159,10 +158,10 @@ def check_for_authorization(current_user, dataset_name):
     per = Permissions.query.filter_by(name_of_dataset=dataset_name, Email=current_user.Email).first()
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
 
-    if((dataset.public_private=="public")):
+    if dataset.public_private == "public":
         return False
 
-    if ((per is None or current_user.Email != per.owner.Email) and (dataset.owner.Email != current_user.Email)):
+    if (per is None or current_user.Email != per.owner.Email) and (dataset.owner.Email != current_user.Email):
         return True
     else:
         return False
@@ -185,14 +184,10 @@ def get_data_on_dataset(current_user):
         for curr_disc in discretizations:
             karma_arr.append(karma_lego.query.filter_by(discretization=curr_disc).all())
             num = num + len(karma_arr[x])
-            if curr_disc.binning_by_value:
-                binning = "true"
-            else:
-                binning = "false"
             disc_to_return[str(x)] = {"MethodOfDiscretization": str(curr_disc.AbMethod),
                                       "BinsNumber": str(curr_disc.NumStates),
                                       "InterpolationGap": str(curr_disc.InterpolationGap),
-                                      "PAAWindowSize": str(curr_disc.PAA), "BinningByValue": binning,
+                                      "PAAWindowSize": str(curr_disc.PAA),
                                       "id": str(curr_disc.id)}
             x = x + 1
         x = 0
@@ -452,7 +447,7 @@ def get_dataset_name(disc):
 
 
 def create_directory_disc(dataset_name, discretization_id):
-    path = dataset_name + "/" + discretization_id
+    path = DATASETS_ROOT + '/' + dataset_name + "/" + discretization_id
     try:
         os.mkdir(path)
     except OSError:
@@ -676,6 +671,10 @@ def validate_kb_file_body(kb_file_path):
     return flag
 
 
+def validate_classes_in_raw_data(raw_data_path):
+    return True
+
+
 @app.route('/addNewDisc', methods=['POST'])
 @token_required
 def add_new_disc(current_user):
@@ -683,10 +682,8 @@ def add_new_disc(current_user):
     data = request.form
     PAA = int(data['PAA'])
     AbMethod = str(data['AbMethod'])
-    NumStates = int(data['NumStates'])
     InterpolationGap = int(data['InterpolationGap'])
     dataset_name = str(data["datasetName"])
-    binning = True  # deprecated
 
     # generate a unique id for our new discretization
     disc_id = str(uuid.uuid4())
@@ -697,6 +694,7 @@ def add_new_disc(current_user):
     disc_path = os.path.join(dataset_path, disc_id)
 
     create_directory_disc(dataset_name, disc_id)
+    dataset1 = info_about_datasets.query.filter_by(Name=dataset_name).first()
 
     # retrieve temporal property id list from vmap file
     temporal_variables = []
@@ -729,23 +727,22 @@ def add_new_disc(current_user):
             return jsonify({'message': 'the gradient file you supplied has incorrect data.'}), 400
 
         if not validate_uniqueness(dataset_path, GradientFile_name, gradient_path):
-            os.remove(gradient_path)
-            os.rmdir(disc_path)
-            return jsonify({'message': 'the same gradient file already exists in the system'}), 400
+            if check_if_already_exists(dataset1, PAA, AbMethod, 0, InterpolationGap, GradientFile_name, None):
+                os.remove(gradient_path)
+                os.rmdir(disc_path)
+                return jsonify({'message': 'the same gradient file already exists in the system'}), 400
 
-        # Set NumStates's value in the DB to 0
-        # This is to signify that the number of bins isn't the same across all temporal properties.
-        NumStates = 0
         config["gradient_prefix"] = " " + GRADIENT_PREFIX
         config["gradient_flag"] = " " + GRADIENT_FLAG
         config["gradient_path"] = " " + gradient_path.replace('\\', '/')
         config["gradient_window_size"] = " " + gradient_window_size
     else:
         GradientFile_name = None
+        gradient_window_size = 0
 
     # if this is a knowledge-based discretization (by value), we also need to validate the file first
     if 'KnowledgeBasedFile' in request.files.keys():
-        KnowledgeBasedFile = request.files['GradientFile']
+        KnowledgeBasedFile = request.files['KnowledgeBasedFile']
 
         KnowledgeBasedFile.filename = "states_knowledge_based.csv"
         KnowledgeBasedFile_name = KnowledgeBasedFile.filename
@@ -763,41 +760,48 @@ def add_new_disc(current_user):
             return jsonify({'message': 'the knowledge-based file you supplied has incorrect fields.'}), 400
 
         if not validate_uniqueness(dataset_path, KnowledgeBasedFile_name, kb_path):
-            os.remove(kb_path)
-            os.rmdir(disc_path)
-            return jsonify({'message': 'the same knowledge-based file already exists in the system'}), 400
+            if check_if_already_exists(dataset1, PAA, AbMethod, 0, InterpolationGap, None, KnowledgeBasedFile_name):
+                os.remove(kb_path)
+                os.rmdir(disc_path)
+                return jsonify({'message': 'the same knowledge-based file already exists in the system'}), 400
 
-        # Set NumStates's value in the DB to 0
-        # This is to signify that the number of bins isn't the same across all temporal properties.
-        NumStates = 0
         config["knowledge_based"] = " " + KB_PREFIX
         config["knowledge_based_path"] = " " + kb_path.replace('\\', '/')
     else:
         KnowledgeBasedFile_name = None
 
-    dataset1 = info_about_datasets.query.filter_by(Name=dataset_name).first()
-
     # now we need to check if we haven't seen this discretization before
     # kb excluded because we already verified the configuration's uniqueness
     # no need to make a temporal abstraction file either
     if 'GradientFile' not in request.files.keys() and 'KnowledgeBasedFile' not in request.files.keys():
+        NumStates = int(data['NumStates'])
         if check_if_already_exists(dataset1, PAA, AbMethod, NumStates, InterpolationGap, GradientFile_name,
                                    KnowledgeBasedFile_name):
             return jsonify({'message': 'already exists!'}), 400
 
-    # in case a request for a TD4C discretization came in, we should verify that the raw data is divided into classes.
-    # a raw data file is divided into classes if, for every entityID in the file,
-    # there exists a TemporalPropertyID with the value -1, a TimeStamp with the value 0, and a TemporalPropertyValue
-    # of either 0 or 1. otherwise a TD4C discretization is not possible
+        # in case a request for a TD4C discretization came in,
+        # we should verify that the raw data is divided into classes.
+        # a raw data file is divided into classes if, for every entityID in the file,
+        # there exists:
+        # A TemporalPropertyID with the value -1,
+        # A TimeStamp with the value 0,
+        # And a TemporalPropertyValue of either 0 or 1. otherwise a TD4C discretization is not possible
+        if "td4c" in ABSTRACTION_METHOD_CONVERSION[AbMethod]:
+            if not validate_classes_in_raw_data(os.path.join(dataset_path, dataset_name + ".csv")):
+                return jsonify({'message': 'a TD4C discretization was requested. '
+                                           'However, the data is not classified'}), 400
+
+    else:
+        NumStates = 0
 
     disc = discretization(PAA=PAA,
                           id=disc_id,
                           dataset=dataset1,
                           AbMethod=AbMethod,
                           NumStates=NumStates,
-                          binning_by_value=binning,
                           InterpolationGap=InterpolationGap,
                           GradientFile_name=GradientFile_name,
+                          GradientWindowSize=gradient_window_size,
                           KnowledgeBasedFile_name=KnowledgeBasedFile_name)
     db.session.add(disc)
     db.session.commit()
@@ -814,11 +818,8 @@ def add_new_disc(current_user):
     config["dataset_or_property"] = " " + DATASET_OR_PROPERTY
     config["output_dir_name"] = " " + disc_id
     config["paa_flag"] = " " + PAA_FLAG
-
     config["paa_value"] = " " + str(PAA)
-
-    if 'KnowledgeBasedFile' not in request.files.keys():
-        config["interpolation_gap"] = " " + str(InterpolationGap)
+    config["interpolation_gap"] = " " + str(InterpolationGap)
 
     if 'GradientFile' not in request.files.keys() and 'KnowledgeBasedFile' not in request.files.keys():
         config["discretization_flag"] = " " + DISCRETIZATION_PREFIX
@@ -841,8 +842,7 @@ def run_hugobot(config):
     command += config["dataset_or_property"]  # all paths
     command += config["paa_flag"]  # all paths
     command += config["paa_value"]  # all paths
-
-    command += config["interpolation_gap"]  # regular, gradient
+    command += config["interpolation_gap"]  # all paths
 
     command += config["discretization_flag"]  # regular
     command += config["method"]  # regular
@@ -863,7 +863,7 @@ def run_hugobot(config):
 
 def create_directory_for_dataset(dataset_name):
     try:
-        os.mkdir(dataset_name)
+        os.mkdir(os.path.join(DATASETS_ROOT,dataset_name))
     except OSError:
         print("Creation of the directory %s failed" % dataset_name)
     else:
@@ -872,7 +872,7 @@ def create_directory_for_dataset(dataset_name):
 
 
 def create_directory(dataset_name, discretization_id, kl_id):
-    path = dataset_name + "/" + discretization_id + "/" + kl_id
+    path = DATASETS_ROOT + '/' + dataset_name + "/" + discretization_id + "/" + kl_id
     try:
         os.mkdir(path)
     except OSError:
