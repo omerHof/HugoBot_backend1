@@ -678,8 +678,36 @@ def validate_classes_in_raw_data(raw_data_path):
 @app.route('/addNewDisc', methods=['POST'])
 @token_required
 def add_new_disc(current_user):
+
+    # <editor-fold desc="Input tests">
     # retrieve user input from request
     data = request.form
+    if not check_non_negative_int(data['PAA']) or int(data['PAA']) < 1:
+        return jsonify({'message': 'Incorrect parameter: '
+                                   'PAA has to be a positive integer larger than 1'}), 400
+
+    if not check_non_negative_int(data['InterpolationGap']) or int(data['InterpolationGap']) < 1:
+        return jsonify({'message': 'Incorrect parameter: '
+                                   'Interpolation Gap has to be a positive integer of at least 1'}), 400
+
+    if 'NumStates' in data.keys():
+        if not check_non_negative_int(data['NumStates']) or int(data['NumStates']) < 2:
+            return jsonify({'message': 'Incorrect parameter: '
+                                       'Number of States has to be a positive integer of at least 2'}), 400
+
+    if 'GradientWindowSize' in data.keys():
+        if not check_non_negative_int(data['GradientWindowSize']) or int(data['GradientWindowSize']) < 2:
+            return jsonify({'message': 'Incorrect parameter: '
+                                       'Gradient window size has to be a positive integer of at least 2'}), 400
+
+    if str(data['AbMethod']) == "Gradient" and 'GradientFile' not in request.files.keys():
+        return jsonify({'message': 'You must provide a gradient file'}), 400
+
+    if str(data['AbMethod']) == "Knowledge-Based" and 'KnowledgeBasedFile' not in request.files.keys():
+        return jsonify({'message': 'You must provide a knowledge-based file'}), 400
+    # </editor-fold>
+
+    # <editor-fold desc="General basic setup">
     PAA = int(data['PAA'])
     AbMethod = str(data['AbMethod'])
     InterpolationGap = int(data['InterpolationGap'])
@@ -695,7 +723,9 @@ def add_new_disc(current_user):
 
     create_directory_disc(dataset_name, disc_id)
     dataset1 = info_about_datasets.query.filter_by(Name=dataset_name).first()
+    # </editor-fold>
 
+    # <editor-fold desc="Get variable list from VMap file">
     # retrieve temporal property id list from vmap file
     temporal_variables = []
     vmap_path = dataset_path + '/' + 'VMap.csv'
@@ -705,7 +735,9 @@ def add_new_disc(current_user):
             if counter > 0:
                 temporal_variables.append(row.split(',')[0])
             counter = counter + 1
+    # </editor-fold>
 
+    # <editor-fold desc="Gradient">
     # if this is a gradient discretization, validate the file first
     if 'GradientFile' in request.files.keys():
         GradientFile = request.files['GradientFile']
@@ -739,7 +771,9 @@ def add_new_disc(current_user):
     else:
         GradientFile_name = None
         gradient_window_size = 0
+    # </editor-fold>
 
+    # <editor-fold desc="Knowledge-Based">
     # if this is a knowledge-based discretization (by value), we also need to validate the file first
     if 'KnowledgeBasedFile' in request.files.keys():
         KnowledgeBasedFile = request.files['KnowledgeBasedFile']
@@ -769,7 +803,9 @@ def add_new_disc(current_user):
         config["knowledge_based_path"] = " " + kb_path.replace('\\', '/')
     else:
         KnowledgeBasedFile_name = None
+    # </editor-fold>
 
+    # <editor-fold desc="Regular (including TD4C)">
     # now we need to check if we haven't seen this discretization before
     # kb excluded because we already verified the configuration's uniqueness
     # no need to make a temporal abstraction file either
@@ -793,7 +829,9 @@ def add_new_disc(current_user):
 
     else:
         NumStates = 0
+    # </editor-fold>
 
+    # <editor-fold desc="Add to DB">
     disc = discretization(PAA=PAA,
                           id=disc_id,
                           dataset=dataset1,
@@ -806,7 +844,9 @@ def add_new_disc(current_user):
     db.session.add(disc)
     db.session.commit()
     db.session.close()
+    # </editor-fold>
 
+    # <editor-fold desc="Prepare query for HugoBot">
     # os.path.join() won't work here
     dataset_path = DATASETS_ROOT + '/' + dataset_name
     disc_path = DATASETS_ROOT + '/' + dataset_name + '/' + disc_id
@@ -827,6 +867,7 @@ def add_new_disc(current_user):
         config["num_bins"] = " " + str(NumStates)
 
     run_hugobot(config)
+    # </editor-fold>
 
     return "success!"
 
