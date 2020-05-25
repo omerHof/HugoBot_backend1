@@ -26,10 +26,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 db = SQLAlchemy(app)
 
 
-def empty_string():
-    return ""
-
-
 SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
 DATASETS_ROOT = SERVER_ROOT + '/Datasets'
 RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
@@ -45,19 +41,25 @@ DISCRETIZATION_PREFIX = "discretization"
 GRADIENT_PREFIX = "gradient"
 GRADIENT_FLAG = "-sp"
 KB_PREFIX = "knowledge-based"
-ABSTRACTION_METHOD_CONVERSION = {'Equal Frequency': 'equal-frequency',
-                                 'Equal Width': 'equal-width',
-                                 'SAX': 'sax',
-                                 'Persist': 'persist',
-                                 'KMeans': 'kmeans',
-                                 'Knowledge-Based (by Value)': 'knowledge-based',
-                                 'Knowledge-Based (by Gradient)': 'gradient',
-                                 'TD4C-SKL': 'td4c-skl',
-                                 'TD4C-Entropy': 'td4c-entropy',
-                                 'TD4C-Entropy-IG': 'td4c-entropy-ig',
-                                 'TD4C-Cosine': 'td4c-cosine',
-                                 'TD4C-Diffsum': 'td4c-diffsum',
-                                 'TD4C-Diffmax': 'td4c-diffmax'}
+ABSTRACTION_METHOD_CONVERSION = {
+    'Equal Frequency': 'equal-frequency',
+    'Equal Width': 'equal-width',
+    'SAX': 'sax',
+    'Persist': 'persist',
+    'KMeans': 'kmeans',
+    'Knowledge-Based': 'knowledge-based',
+    'Gradient': 'gradient',
+    'TD4C-Cosine': 'td4c-cosine',
+    'TD4C-Diffmax': 'td4c-diffmax',
+    'TD4C-Diffsum': 'td4c-diffsum',
+    'TD4C-Entropy': 'td4c-entropy',
+    'TD4C-Entropy-IG': 'td4c-entropy-ig',
+    'TD4C-SKL': 'td4c-skl'
+}
+
+
+def empty_string():
+    return ""
 
 
 # this is the users table
@@ -983,12 +985,14 @@ def check_if_not_int(num):
     else:
         return True
 
+
 def check_if_not_int_but_0(num):
     num1 = float(num)
     if num1.is_integer() and num1 > -1:
         return False
     else:
         return True
+
 
 @app.route('/addTIM', methods=['POST'])
 @token_required
@@ -1075,15 +1079,13 @@ def add_TIM(current_user):
         return jsonify({'message': 'problem with data'}), 404
 
 
-
-
 # post reqeust that gets a json with 'Email',
 # 'Nickname'(optional), 'Password', 'Lname', 'Fname'
 @app.route('/register', methods=['POST'])
 def create_user():
     try:
         data = request.form
-        if(check_email.check(data['Email'])):
+        if check_email.check(data['Email']):
             return jsonify({'message': 'email is not valid'}), 400
         double_user = Users.query.filter_by(Email=data['Email']).first()
         if double_user:
