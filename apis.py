@@ -672,7 +672,20 @@ def validate_kb_file_body(kb_file_path):
 
 
 def validate_classes_in_raw_data(raw_data_path):
-    return True
+    entity_list = get_variable_list(raw_data_path, 0)
+    with open(raw_data_path) as data:
+        reader = csv.reader(data, delimiter=',')
+        i = 0
+        for row in reader:
+            if i == 0:
+                i = i + 1
+                continue
+            entity = row[0]
+            if row[1] == "-1":
+                if row[2] == "0":
+                    if check_non_negative_int(row[3]):
+                        entity_list.remove(entity)
+    return len(entity_list) == 0
 
 
 @app.route('/addNewDisc', methods=['POST'])
@@ -1505,9 +1518,7 @@ def get_example_file():
 
 @app.route("/razTest", methods=["GET"])
 def raz_test():
-    path = os.path.join(DATASETS_ROOT, "RazshtData", "VMap.csv")
-    path_for_hugobot = path.replace('\\', '/')
-    return path_for_hugobot, 200
+    return "true",200
 
 
 if __name__ == '__main__':
