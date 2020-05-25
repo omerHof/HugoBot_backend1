@@ -39,8 +39,12 @@ KB_HEADER_FORMAT = ["StateID", "TemporalPropertyID", "Method", "BinID", "BinLow"
 HUGOBOT_EXECUTABLE_PATH = "HugoBot-beta-release-v1.1.5_03-01-2020/cli.py"
 CLI_PATH = SERVER_ROOT + '/' + HUGOBOT_EXECUTABLE_PATH
 MODE = "temporal-abstraction"
-DATASET_OR_PROPERTY = "per-property"
-KB_PREFIX = "-s"
+DATASET_OR_PROPERTY = "per-dataset"
+PAA_FLAG = "-paa"
+DISCRETIZATION_PREFIX = "discretization"
+GRADIENT_PREFIX = "gradient"
+GRADIENT_FLAG = "-sp"
+KB_PREFIX = "knowledge-based"
 ABSTRACTION_METHOD_CONVERSION = {'Equal Frequency': 'equal-frequency',
                                  'Equal Width': 'equal-width',
                                  'SAX': 'sax',
@@ -680,7 +684,7 @@ def add_new_disc(current_user):
     NumStates = int(data['NumStates'])
     InterpolationGap = int(data['InterpolationGap'])
     dataset_name = str(data["datasetName"])
-    binning = True
+    binning = True  # deprecated
 
     # generate a unique id for our new discretization
     disc_id = str(uuid.uuid4())
@@ -705,6 +709,7 @@ def add_new_disc(current_user):
     # if this is a gradient discretization, validate the file first
     if 'GradientFile' in request.files.keys():
         GradientFile = request.files['GradientFile']
+        gradient_window_size = data['GradientWindowSize']
 
         GradientFile.filename = "states_kb_gradient.csv"
         GradientFile_name = GradientFile.filename
@@ -726,15 +731,13 @@ def add_new_disc(current_user):
             os.rmdir(disc_path)
             return jsonify({'message': 'the same gradient file already exists in the system'}), 400
 
-        # Set NumStates and InterpolationGap's values in the DB to 0
-        # and PAA to 1 (1 = no-op)
-        # This is to signify that they aren't the same across all temporal properties.
-        # In the case of PAA, the user already gave us a discretization
-        PAA = 1
+        # Set NumStates's value in the DB to 0
+        # This is to signify that the number of bins isn't the same across all temporal properties.
         NumStates = 0
-        InterpolationGap = 0
-        config["kb_flag"] = " " + KB_PREFIX
-        config["states_file"] = " " + gradient_path
+        config["gradient_prefix"] = " " + GRADIENT_PREFIX
+        config["gradient_flag"] = " " + GRADIENT_FLAG
+        config["gradient_path"] = " " + gradient_path.replace('\\', '/')
+        config["gradient_window_size"] = " " + gradient_window_size
     else:
         GradientFile_name = None
 
@@ -762,15 +765,11 @@ def add_new_disc(current_user):
             os.rmdir(disc_path)
             return jsonify({'message': 'the same knowledge-based file already exists in the system'}), 400
 
-        # Set NumStates and InterpolationGap's values in the DB to 0
-        # and PAA to 1 (1 = no-op)
-        # This is to signify that they aren't the same across all temporal properties.
-        # In the case of PAA, the user already gave us a discretization
-        PAA = 1
+        # Set NumStates's value in the DB to 0
+        # This is to signify that the number of bins isn't the same across all temporal properties.
         NumStates = 0
-        InterpolationGap = 0
-        config["kb_flag"] = " " + KB_PREFIX
-        config["states_file"] = " " + kb_path
+        config["knowledge_based"] = " " + KB_PREFIX
+        config["knowledge_based_path"] = " " + kb_path.replace('\\', '/')
     else:
         KnowledgeBasedFile_name = None
 
@@ -784,25 +783,10 @@ def add_new_disc(current_user):
                                    KnowledgeBasedFile_name):
             return jsonify({'message': 'already exists!'}), 400
 
-        # temporal-abstraction 'Path to dataset file' 'Path to output dir' per-property
-        # -s (when using Gradient or KnowledgeBased) 'Path to states file' (when using Gradient or KnowledgeBased)
-        # 'Path to Preprocessing file' 'Path to Temporal Abstraction file'
-
-        # create preprocessing and temporal abstraction files from user input
-        preprocessing_path = disc_path + '/' + 'preprocessing.csv'
-        with open(preprocessing_path, 'w', newline='') as preprocessing:
-            writer = csv.writer(preprocessing, delimiter=',')
-            writer.writerow(['TemporalPropertyID', 'PAAWindowSize', 'StdCoefficient', 'MaxGap'])
-            for variable in temporal_variables:
-                writer.writerow([variable, str(PAA), '', '5'])
-
-        temporal_abstraction_path = disc_path + '/' + 'temporal_abstraction.csv'
-        with open(temporal_abstraction_path, 'w', newline='') as temporal_abstraction:
-            writer = csv.writer(temporal_abstraction, delimiter=',')
-            writer.writerow(['TemporalPropertyID', 'Method', 'NbBins', 'GradientWindowSize'])
-            for variable in temporal_variables:
-                ab_method_code = ABSTRACTION_METHOD_CONVERSION[AbMethod]
-                writer.writerow([variable, ab_method_code, NumStates])
+    # in case a request for a TD4C discretization came in, we should verify that the raw data is divided into classes.
+    # a raw data file is divided into classes if, for every entityID in the file,
+    # there exists a TemporalPropertyID with the value -1, a TimeStamp with the value 0, and a TemporalPropertyValue
+    # of either 0 or 1. otherwise a TD4C discretization is not possible
 
     disc = discretization(PAA=PAA,
                           id=disc_id,
@@ -823,14 +807,21 @@ def add_new_disc(current_user):
 
     config["cli_path"] = " " + CLI_PATH
     config["mode"] = " " + MODE
-    config["dataset_or_property"] = " " + "per-dataset"
     config["dataset_path"] = " " + dataset_path + '/' + dataset_name + ".csv"
     config["output_dir"] = " " + disc_path
+    config["dataset_or_property"] = " " + DATASET_OR_PROPERTY
     config["output_dir_name"] = " " + disc_id
+    config["paa_flag"] = " " + PAA_FLAG
+
+    config["paa_value"] = " " + str(PAA)
+
+    if 'KnowledgeBasedFile' not in request.files.keys():
+        config["interpolation_gap"] = " " + str(InterpolationGap)
+
     if 'GradientFile' not in request.files.keys() and 'KnowledgeBasedFile' not in request.files.keys():
-        config["dataset_or_property"] = " " + DATASET_OR_PROPERTY
-        config["preprocessing_path"] = " " + disc_path + '/' + "preprocessing.csv"
-        config["temporal_abstraction_path"] = " " + disc_path + '/' + "temporal_abstraction.csv"
+        config["discretization_flag"] = " " + DISCRETIZATION_PREFIX
+        config["method"] = " " + ABSTRACTION_METHOD_CONVERSION[AbMethod]
+        config["num_bins"] = " " + str(NumStates)
 
     run_hugobot(config)
 
@@ -838,21 +829,30 @@ def add_new_disc(current_user):
 
 
 def run_hugobot(config):
+    # defaults for every path
     command = ""
-    command += "python"
-    command += config["cli_path"]
-    command += config["mode"]
-    command += config["dataset_path"]
-    command += config["output_dir"]
-    command += config["dataset_or_property"]
-    command += config["kb_flag"]
-    command += config["states_file"]
-    command += config["max_gap"]
-    command += config["discretization"]
-    command += config["abstraction_method"]
-    command += config["number_of_bins"]
-    command += config["preprocessing_path"]
-    command += config["temporal_abstraction_path"]
+    command += "python"  # all paths
+    command += config["cli_path"]  # all paths
+    command += config["mode"]  # all paths
+    command += config["dataset_path"]  # all paths
+    command += config["output_dir"]  # all paths
+    command += config["dataset_or_property"]  # all paths
+    command += config["paa_flag"]  # all paths
+    command += config["paa_value"]  # all paths
+
+    command += config["interpolation_gap"]  # regular, gradient
+
+    command += config["discretization_flag"]  # regular
+    command += config["method"]  # regular
+    command += config["num_bins"]  # regular
+
+    command += config["gradient_prefix"]  # gradient
+    command += config["gradient_flag"]  # gradient
+    command += config["gradient_path"]  # gradient
+    command += config["gradient_window_size"]  # gradient
+
+    command += config["knowledge_based"]  # knowledge-based
+    command += config["knowledge_based_path"]  # knowledge-based
 
     print(command)
 
@@ -1465,6 +1465,13 @@ def get_example_file():
         return send_file(file_path), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request file cannot be found.'}), 404
+
+
+@app.route("/razTest", methods=["GET"])
+def raz_test():
+    path = os.path.join(DATASETS_ROOT, "RazshtData", "VMap.csv")
+    path_for_hugobot = path.replace('\\', '/')
+    return path_for_hugobot, 200
 
 
 if __name__ == '__main__':
