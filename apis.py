@@ -24,7 +24,6 @@ app.config['SECRET_KEY'] = '5791628bb0b13ce0c676dfde280ba245'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 db = SQLAlchemy(app)
 
-
 SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
 DATASETS_ROOT = SERVER_ROOT + '/Datasets'
 RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
@@ -184,11 +183,12 @@ def get_data_on_dataset(current_user):
         for curr_disc in discretizations:
             karma_arr.append(karma_lego.query.filter_by(discretization=curr_disc).all())
             num = num + len(karma_arr[x])
-            disc_to_return[str(x)] = {"MethodOfDiscretization": str(curr_disc.AbMethod),
-                                      "BinsNumber": str(curr_disc.NumStates),
-                                      "InterpolationGap": str(curr_disc.InterpolationGap),
-                                      "PAAWindowSize": str(curr_disc.PAA),
-                                      "id": str(curr_disc.id)}
+            disc_to_return[str(x)] = {
+                "BinsNumber": str(curr_disc.NumStates),
+                "id": str(curr_disc.id),
+                "InterpolationGap": str(curr_disc.InterpolationGap),
+                "MethodOfDiscretization": str(curr_disc.AbMethod),
+                "PAAWindowSize": str(curr_disc.PAA)}
             x = x + 1
         x = 0
         karma_to_return = {"lengthNum": num}
@@ -199,18 +199,19 @@ def get_data_on_dataset(current_user):
                     i_s = "true"
                 else:
                     i_s = "false"
-                karma_to_return[str(x)] = {"MethodOfDiscretization": str(curr_karma.discretization.AbMethod),
-                                           "BinsNumber": str(curr_karma.discretization.NumStates),
-                                           "InterpolationGap": str(curr_karma.discretization.InterpolationGap),
-                                           "PAAWindowSize": str(curr_karma.discretization.PAA),
-                                           "karma_id": str(curr_karma.id),
-                                           "epsilon": str(curr_karma.epsilon),
-                                           "VerticalSupport": str(curr_karma.min_ver_support),
-                                           "MaxGap": str(curr_karma.max_gap),
-                                           "numRelations": str(curr_karma.num_relations),
-                                           "maxTirpLength": str(curr_karma.max_tirp_length),
-                                           "indexSame": i_s,
-                                           "discId": curr_karma.discretization.id}
+                karma_to_return[str(x)] = {
+                    "BinsNumber": str(curr_karma.discretization.NumStates),
+                    "discId": curr_karma.discretization.id,
+                    "epsilon": str(curr_karma.epsilon),
+                    "indexSame": i_s,
+                    "InterpolationGap": str(curr_karma.discretization.InterpolationGap),
+                    "karma_id": str(curr_karma.id),
+                    "MaxGap": str(curr_karma.max_gap),
+                    "maxTirpLength": str(curr_karma.max_tirp_length),
+                    "MethodOfDiscretization": str(curr_karma.discretization.AbMethod),
+                    "numRelations": str(curr_karma.num_relations),
+                    "PAAWindowSize": str(curr_karma.discretization.PAA),
+                    "VerticalSupport": str(curr_karma.min_ver_support)}
                 x = x + 1
         to_return = {"disc": disc_to_return, "karma": karma_to_return}
         db.session.close()
@@ -254,15 +255,13 @@ def ask_permission(current_user):
         dataset_name = request.args.get('dataset')
         dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
         owner_email = dataset.owner.Email
-        print("\"" + owner_email + "\"")
-        print("\"" + current_user.Email + "\"")
-        print("\"" + dataset_name + "\"")
         ask = ask_permissions(owner=current_user, dataset=dataset)
         db.session.add(ask)
         db.session.commit()
         try:
             notify_by_email.send_an_email(
-                message=f"Subject: A user with the email " + current_user.Email
+                message=f"Subject: A user with the email "
+                        + current_user.Email
                         + " has asked for permission to use \""
                         + dataset_name + "\"",
                 receiver_email=owner_email)
@@ -286,10 +285,12 @@ def load_mail(current_user):
         for curr_dataset in my_datasets:
             # full_name = current_user.FName + " " + current_user.LName
             curr_email = curr_dataset.Email
-            to_return["myDatasets"][str(x)] = {"DatasetName": curr_dataset.Name, "Size": str(curr_dataset.size),
-                                               "Owner": curr_email,
-                                               "Category": curr_dataset.category,
-                                               "PublicPrivate": curr_dataset.public_private}
+            to_return["myDatasets"][str(x)] = {
+                "Category": curr_dataset.category,
+                "DatasetName": curr_dataset.Name,
+                "Owner": curr_email,
+                "PublicPrivate": curr_dataset.public_private,
+                "Size": str(curr_dataset.size)}
             x = x + 1
         users_permissions = Permissions.query.filter_by(Email=current_user.Email).all()
         to_return["myPermissions"] = {}
@@ -300,10 +301,12 @@ def load_mail(current_user):
             curr_dataset = curr_record.dataset
             curr_email = curr_dataset.Email
             # full_name = current_user.FName + " " + current_user.LName
-            to_return["myPermissions"][str(x)] = {"DatasetName": curr_dataset.Name, "Size": str(curr_dataset.size),
-                                                  "Owner": curr_email,
-                                                  "Category": curr_dataset.category,
-                                                  "PublicPrivate": curr_dataset.public_private}
+            to_return["myPermissions"][str(x)] = {
+                "Category": curr_dataset.category,
+                "DatasetName": curr_dataset.Name,
+                "Owner": curr_email,
+                "PublicPrivate": curr_dataset.public_private,
+                "Size": str(curr_dataset.size)}
             x = x + 1
         users_ask_permissions = ask_permissions.query.filter_by(Email=current_user.Email).all()
         to_return["askPermissions"] = {}
@@ -315,10 +318,12 @@ def load_mail(current_user):
             curr_email = curr_dataset.Email
             print(str(curr_email))
             # full_name = current_user.FName + " " + current_user.LName
-            to_return["askPermissions"][str(x)] = {"DatasetName": curr_dataset.Name, "Size": str(curr_dataset.size),
-                                                   "Owner": curr_email,
-                                                   "Category": curr_dataset.category,
-                                                   "PublicPrivate": curr_dataset.public_private}
+            to_return["askPermissions"][str(x)] = {
+                "Category": curr_dataset.category,
+                "DatasetName": curr_dataset.Name,
+                "Owner": curr_email,
+                "PublicPrivate": curr_dataset.public_private,
+                "Size": str(curr_dataset.size)}
             x = x + 1
 
         ask_me = ask_permissions.query.all()
@@ -330,11 +335,13 @@ def load_mail(current_user):
             curr_email = curr_dataset.Email
             if curr_email == current_user.Email:
                 # full_name = current_user.FName + " " + current_user.LName
-                to_return["approve"][str(x)] = {"DatasetName": curr_dataset.Name, "Size": str(curr_dataset.size),
-                                                "Grantee": curr_record.Email,
-                                                "Owner": curr_email,
-                                                "Category": curr_dataset.category,
-                                                "PublicPrivate": curr_dataset.public_private}
+                to_return["approve"][str(x)] = {
+                    "Category": curr_dataset.category,
+                    "DatasetName": curr_dataset.Name,
+                    "Grantee": curr_record.Email,
+                    "Owner": curr_email,
+                    "PublicPrivate": curr_dataset.public_private,
+                    "Size": str(curr_dataset.size)}
                 counter = counter + 1
                 x = x + 1
         print(to_return["approve"])
@@ -368,7 +375,7 @@ def accept_permission(current_user):
         db.session.commit()
         db.session.close()
         notify_by_email.send_an_email(
-            message=f"Subject: You got permission for Dataset "+dataset_name,
+            message=f"Subject: You got permission for Dataset " + dataset_name,
             receiver_email=user_email)
         return jsonify({'message': 'permission accepted!'})
     except:
@@ -393,7 +400,7 @@ def reject_permission(current_user):
         db.session.commit()
         db.session.close()
         notify_by_email.send_an_email(
-            message=f"Subject: Your permission request for Dataset "+dataset_name + " was rejected",
+            message=f"Subject: Your permission request for Dataset " + dataset_name + " was rejected",
             receiver_email=user_email)
         return jsonify({'message': 'permission accepted!'})
     except:
@@ -410,8 +417,12 @@ def get_all_datasets():
         to_return["lengthNum"] = len(datasets)
         for curr_dataset in datasets:
             full_name = curr_dataset.owner.FName + " " + curr_dataset.owner.LName
-            to_return[str(x)] = {"DatasetName": curr_dataset.Name, "Size": str(curr_dataset.size), "Owner": full_name,
-                                 "Category": curr_dataset.category, "PublicPrivate": curr_dataset.public_private}
+            to_return[str(x)] = {
+                "Category": curr_dataset.category,
+                "DatasetName": curr_dataset.Name,
+                "Owner": full_name,
+                "PublicPrivate": curr_dataset.public_private,
+                "Size": str(curr_dataset.size)}
             x = x + 1
         db.session.close()
         return jsonify(to_return)
@@ -420,10 +431,15 @@ def get_all_datasets():
         return jsonify({'message': 'there has been an error!'}), 500
 
 
-def check_exists(disc, epsilon, max_gap, verticale_support, num_relations, index_same, max_tirp_length):
-    exists = karma_lego.query.filter_by(epsilon=epsilon, min_ver_support=verticale_support, num_relations=num_relations,
-                                        max_gap=max_gap, max_tirp_length=max_tirp_length, index_same=index_same,
-                                        discretization=disc).first()
+def check_exists(disc, epsilon, max_gap, vertical_support, num_relations, index_same, max_tirp_length):
+    exists = karma_lego.query.filter_by(
+        discretization=disc,
+        epsilon=epsilon,
+        index_same=index_same,
+        max_gap=max_gap,
+        max_tirp_length=max_tirp_length,
+        min_ver_support=vertical_support,
+        num_relations=num_relations).first()
     if exists is None:
         return False
     return True
@@ -431,10 +447,14 @@ def check_exists(disc, epsilon, max_gap, verticale_support, num_relations, index
 
 def check_if_already_exists(dataset, paa, ab_method, num_states, interpolation_gap, gradient_file_name,
                             knowledge_based_file_name):
-    exists = discretization.query.filter_by(dataset=dataset, PAA=paa, AbMethod=ab_method, NumStates=num_states,
-                                            InterpolationGap=interpolation_gap,
-                                            GradientFile_name=gradient_file_name,
-                                            KnowledgeBasedFile_name=knowledge_based_file_name).first()
+    exists = discretization.query.filter_by(
+        AbMethod=ab_method,
+        dataset=dataset,
+        GradientFile_name=gradient_file_name,
+        InterpolationGap=interpolation_gap,
+        KnowledgeBasedFile_name=knowledge_based_file_name,
+        NumStates=num_states,
+        PAA=paa).first()
     if exists is None:
         return False
     return True
@@ -691,7 +711,6 @@ def validate_classes_in_raw_data(raw_data_path):
 @app.route('/addNewDisc', methods=['POST'])
 @token_required
 def add_new_disc(current_user):
-
     # <editor-fold desc="Input tests">
     # retrieve user input from request
     data = request.form
@@ -845,15 +864,16 @@ def add_new_disc(current_user):
     # </editor-fold>
 
     # <editor-fold desc="Add to DB">
-    disc = discretization(PAA=PAA,
-                          id=disc_id,
-                          dataset=dataset1,
-                          AbMethod=AbMethod,
-                          NumStates=NumStates,
-                          InterpolationGap=InterpolationGap,
-                          GradientFile_name=GradientFile_name,
-                          GradientWindowSize=gradient_window_size,
-                          KnowledgeBasedFile_name=KnowledgeBasedFile_name)
+    disc = discretization(
+        AbMethod=AbMethod,
+        dataset=dataset1,
+        GradientFile_name=GradientFile_name,
+        GradientWindowSize=gradient_window_size,
+        id=disc_id,
+        InterpolationGap=InterpolationGap,
+        KnowledgeBasedFile_name=KnowledgeBasedFile_name,
+        NumStates=NumStates,
+        PAA=PAA)
     db.session.add(disc)
     db.session.commit()
     db.session.close()
@@ -917,7 +937,7 @@ def run_hugobot(config):
 
 def create_directory_for_dataset(dataset_name):
     try:
-        os.mkdir(os.path.join(DATASETS_ROOT,dataset_name))
+        os.mkdir(os.path.join(DATASETS_ROOT, dataset_name))
     except OSError:
         print("Creation of the directory %s failed" % dataset_name)
     else:
@@ -999,11 +1019,12 @@ def get_disc(current_user):
 
     disc_zip_name = "discretization.zip"
 
-    files_to_send = ["entity-class-relations.csv",
-                     "KL.txt",
-                     "prop-data.csv",
-                     states_file_name,
-                     "symbolic-time-series.csv"]
+    files_to_send = [
+        "entity-class-relations.csv",
+        "KL.txt",
+        "prop-data.csv",
+        states_file_name,
+        "symbolic-time-series.csv"]
 
     create_disc_zip(disc_path, disc_zip_name, files_to_send)
 
@@ -1013,7 +1034,6 @@ def get_disc(current_user):
 @app.route('/getDatasetFiles', methods=['GET'])
 @token_required
 def get_dataset_files(current_user):
-
     dataset_name = request.args.get('dataset_id')
 
     dataset_path = os.path.join(DATASETS_ROOT, dataset_name)
@@ -1066,7 +1086,7 @@ def add_TIM(current_user):
         else:
             epsilon = int(data['Epsilon'])
         max_gap = int(data['Max Gap'])
-        verticale_support = int(data['min_ver_support']) / 100
+        vertical_support = int(data['min_ver_support']) / 100
         num_relations = int(data['num_relations'])
         max_tirp_length = int(data['max Tirp Length'])
         index_same = str(data['index_same'])
@@ -1078,7 +1098,7 @@ def add_TIM(current_user):
         print(epsilon)
         disc = discretization.query.filter_by(id=discretization_id).first()
         email = current_user.Email
-        if check_exists(disc, epsilon, max_gap, verticale_support, num_relations, index_same, max_tirp_length):
+        if check_exists(disc, epsilon, max_gap, vertical_support, num_relations, index_same, max_tirp_length):
             return jsonify({'message': 'already exists!'}), 409
         dataset_name = get_dataset_name(disc)
         KL_id = str(uuid.uuid4())
@@ -1087,46 +1107,71 @@ def add_TIM(current_user):
         for filename in os.listdir(DATASETS_ROOT + '/' + directory_path):
             if filename.endswith(".txt"):
                 start_time = time.time()
-                support_vec = verticale_support
-                num_relations = num_relations
-                max_gap = max_gap
-                epsilon = epsilon
-                max_tirp_length = max_tirp_length
                 path = DATASETS_ROOT + '/' + directory_path + '/' + filename
                 out_path = DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + filename
                 print(out_path)
-                print_output_incrementally = True
+
+                calc_offsets = True
                 entity_ids_num = 2
+                epsilon = epsilon
                 index_same = index_same
-                semicolon_end = True
+                label = 0
+                max_gap = max_gap
+                max_tirp_length = max_tirp_length
                 need_one_sized = True
-                lego_0, karma_0 = RunKarmaLego.runKarmaLego(time_intervals_path=path, output_path=out_path,
-                                                            index_same=index_same, epsilon=epsilon,
-                                                            incremental_output=print_output_incrementally,
-                                                            min_ver_support=support_vec,
-                                                            num_relations=num_relations, skip_followers=False,
-                                                            max_gap=max_gap, label=0,
-                                                            max_tirp_length=max_tirp_length, num_comma=2,
-                                                            entity_ids_num=entity_ids_num,
-                                                            semicolon_end=semicolon_end, need_one_sized=need_one_sized)
+                num_comma = 2
+                num_relations = num_relations
+                print_output_incrementally = True
+                print_params = True
+                semicolon_end = True
+                skip_followers = False
+                support_vec = vertical_support
+                lego_0, karma_0 = RunKarmaLego.runKarmaLego(
+                    calc_offsets=calc_offsets,
+                    entity_ids_num=entity_ids_num,
+                    epsilon=epsilon,
+                    incremental_output=print_output_incrementally,
+                    index_same=index_same,
+                    label=label,
+                    max_gap=max_gap,
+                    max_tirp_length=max_tirp_length,
+                    min_ver_support=support_vec,
+                    need_one_sized=need_one_sized,
+                    num_comma=num_comma,
+                    num_relations=num_relations,
+                    output_path=out_path,
+                    print_params=print_params,
+                    semicolon_end=semicolon_end,
+                    skip_followers=skip_followers,
+                    time_intervals_path=path)
                 # if not print_output_incrementally:
                 lego_0.print_frequent_tirps(out_path)
             else:
                 continue
-        if((os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL.txt'))
-                or (os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL-class-0.0.txt'))
-                or (os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/'+'KL-class-1.0.txt'))):
-            KL = karma_lego(id=KL_id, epsilon=epsilon, min_ver_support=verticale_support, num_relations=num_relations,
-                            max_gap=max_gap, max_tirp_length=max_tirp_length, index_same=index_same,
-                            discretization=disc)
+        if ((os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + 'KL.txt'))
+                or (os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + 'KL-class-0.0.txt'))
+                or (os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + 'KL-class-1.0.txt'))):
+            KL = karma_lego(
+                discretization=disc,
+                epsilon=epsilon,
+                id=KL_id,
+                index_same=index_same,
+                max_gap=max_gap,
+                max_tirp_length=max_tirp_length,
+                min_ver_support=vertical_support,
+                num_relations=num_relations)
             db.session.add(KL)
             db.session.commit()
-            notify_by_email.send_an_email(message=f"Subject: karmalego successfully created", receiver_email=email)
+            notify_by_email.send_an_email(
+                message=f"Subject: karmalego successfully created",
+                receiver_email=email)
             db.session.close()
             return jsonify({'message': 'karmalego created!', 'KL_id': KL_id}), 200
         else:
             db.session.close()
-            notify_by_email.send_an_email(message=f"Subject: problem with creating karmalego", receiver_email=email)
+            notify_by_email.send_an_email(
+                message=f"Subject: problem with creating karmalego",
+                receiver_email=email)
             return jsonify({'message': 'did not create karmalego):'}), 409
     except:
         db.session.close()
@@ -1147,12 +1192,18 @@ def create_user():
             print("hello")
             return jsonify({'message': 'there is already a user with that Email'}), 400
         hashed_password = generate_password_hash(data['Password'], method='sha256')
-        new_user = Users(Email=data['Email'], institute=data["Institute"], degree=data["Degree"],
-                         Password=hashed_password, LName=data['Lname'],
-                         FName=data['Fname'])
+        new_user = Users(
+            degree=data["Degree"],
+            Email=data['Email'],
+            FName=data['Fname'],
+            institute=data["Institute"],
+            LName=data['Lname'],
+            Password=hashed_password)
         db.session.add(new_user)
         db.session.commit()
-        notify_by_email.send_an_email(message=f"Subject: registration successfully completed", receiver_email=data['Email'])
+        notify_by_email.send_an_email(
+            message=f"Subject: registration successfully completed",
+            receiver_email=data['Email'])
     except:
         db.session.rollback()
         db.session.close()
@@ -1425,14 +1476,15 @@ def get_all_info_on_dataset():
     dataset_name = request.args.get("id")
     info = info_about_datasets.query.filter_by(Name=dataset_name).first()
     print(info.Name)
-    return jsonify({"Name": info.Name,
-                    "category": info.category,
-                    "owner_name": info.Email,
-                    "source": info.source,
-                    "Description": info.Description,
-                    "size": str(info.size) + " MB",
-                    "views": info.views,
-                    "downloads": info.downloads}), 200
+    return jsonify(
+        {"category": info.category,
+         "Description": info.Description,
+         "downloads": info.downloads,
+         "Name": info.Name,
+         "owner_name": info.Email,
+         "size": str(info.size) + " MB",
+         "source": info.source,
+         "views": info.views}), 200
 
 
 @app.route("/getRawDataFile", methods=["GET"])
@@ -1509,7 +1561,7 @@ def get_example_file():
     try:
         file_name = request.args.get("file")
         print(file_name)
-        file_path = os.path.join(SERVER_ROOT, "Resources", file_name+'.csv')
+        file_path = os.path.join(SERVER_ROOT, "Resources", file_name + '.csv')
         print(file_path)
         return send_file(file_path), 200
     except FileNotFoundError:
@@ -1518,7 +1570,7 @@ def get_example_file():
 
 @app.route("/razTest", methods=["GET"])
 def raz_test():
-    return "true",200
+    return "true", 200
 
 
 if __name__ == '__main__':
