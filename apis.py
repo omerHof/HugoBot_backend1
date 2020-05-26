@@ -24,6 +24,7 @@ app.config['SECRET_KEY'] = '5791628bb0b13ce0c676dfde280ba245'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 db = SQLAlchemy(app)
 
+# <editor-fold desc="Server Constant Definition">
 SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
 DATASETS_ROOT = SERVER_ROOT + '/Datasets'
 RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
@@ -54,12 +55,10 @@ ABSTRACTION_METHOD_CONVERSION = {
     'TD4C-Entropy-IG': 'td4c-entropy-ig',
     'TD4C-SKL': 'td4c-skl'
 }
+# </editor-fold>
 
 
-def empty_string():
-    return ""
-
-
+# <editor-fold desc="DB ORM">
 # this is the users table
 class Users(db.Model):
     Email = db.Column(db.String(80), primary_key=True)
@@ -124,6 +123,7 @@ class karma_lego(db.Model):
     max_tirp_length = db.Column(db.Integer, nullable=False)
     index_same = db.Column(db.Boolean, nullable=False)
     discretization_name = db.Column(db.String(150), db.ForeignKey('discretization.id'), nullable=False)
+# </editor-fold>
 
 
 # this function checks if the user is connected by checking the token
@@ -153,6 +153,11 @@ def token_required(f):
     return decorated
 
 
+def empty_string():
+    return ""
+
+
+# <editor-fold desc="DB Utils">
 def check_for_authorization(current_user, dataset_name):
     per = Permissions.query.filter_by(name_of_dataset=dataset_name, Email=current_user.Email).first()
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
@@ -166,113 +171,168 @@ def check_for_authorization(current_user, dataset_name):
         return False
 
 
-@app.route('/getDataOnDataset', methods=['GET'])
-@token_required
-def get_data_on_dataset(current_user):
+def check_exists(disc, epsilon, max_gap, vertical_support, num_relations, index_same, max_tirp_length):
+    exists = karma_lego.query.filter_by(
+        discretization=disc,
+        epsilon=epsilon,
+        index_same=index_same,
+        max_gap=max_gap,
+        max_tirp_length=max_tirp_length,
+        min_ver_support=vertical_support,
+        num_relations=num_relations).first()
+    if exists is None:
+        return False
+    return True
+
+
+def check_if_already_exists(dataset, paa, ab_method, num_states, interpolation_gap, gradient_file_name,
+                            knowledge_based_file_name):
+    exists = discretization.query.filter_by(
+        AbMethod=ab_method,
+        dataset=dataset,
+        GradientFile_name=gradient_file_name,
+        InterpolationGap=interpolation_gap,
+        KnowledgeBasedFile_name=knowledge_based_file_name,
+        NumStates=num_states,
+        PAA=paa).first()
+    if exists is None:
+        return False
+    return True
+
+
+def check_for_bad_user_disc(disc, user_id):
+    if disc.dataset.owner.Email == user_id:
+        return False
+    else:
+        return True
+
+
+def check_for_bad_user(kl, user_id):
+    if kl.discretization.dataset.owner.Email == user_id:
+        return False
+    else:
+        return True
+# </editor-fold>
+
+
+# <editor-fold desc="File System Utils">
+def create_directory_disc(dataset_name, discretization_id):
+    path = DATASETS_ROOT + '/' + dataset_name + "/" + discretization_id
     try:
-        dataset_name = request.args.get("id")
-        print(current_user)
-        if check_for_authorization(current_user, dataset_name):
-            return jsonify({'message': 'dont try to fool me, you dont own it!'}), 403
-        discretizations = discretization.query.filter_by(dataset_Name=dataset_name).all()
-        disc_to_return = {}
-        x = 0
-        num = 0
-        disc_to_return["lengthNum"] = len(discretizations)
-        karma_arr = []
-        for curr_disc in discretizations:
-            karma_arr.append(karma_lego.query.filter_by(discretization=curr_disc).all())
-            num = num + len(karma_arr[x])
-            disc_to_return[str(x)] = {
-                "BinsNumber": str(curr_disc.NumStates),
-                "id": str(curr_disc.id),
-                "InterpolationGap": str(curr_disc.InterpolationGap),
-                "MethodOfDiscretization": str(curr_disc.AbMethod),
-                "PAAWindowSize": str(curr_disc.PAA)}
-            x = x + 1
-        x = 0
-        karma_to_return = {"lengthNum": num}
-
-        for karma in karma_arr:
-            for curr_karma in karma:
-                if curr_karma.index_same:
-                    i_s = "true"
-                else:
-                    i_s = "false"
-                karma_to_return[str(x)] = {
-                    "BinsNumber": str(curr_karma.discretization.NumStates),
-                    "discId": curr_karma.discretization.id,
-                    "epsilon": str(curr_karma.epsilon),
-                    "indexSame": i_s,
-                    "InterpolationGap": str(curr_karma.discretization.InterpolationGap),
-                    "karma_id": str(curr_karma.id),
-                    "MaxGap": str(curr_karma.max_gap),
-                    "maxTirpLength": str(curr_karma.max_tirp_length),
-                    "MethodOfDiscretization": str(curr_karma.discretization.AbMethod),
-                    "numRelations": str(curr_karma.num_relations),
-                    "PAAWindowSize": str(curr_karma.discretization.PAA),
-                    "VerticalSupport": str(curr_karma.min_ver_support)}
-                x = x + 1
-        to_return = {"disc": disc_to_return, "karma": karma_to_return}
-        db.session.close()
-        return jsonify(to_return)
-    except:
-        db.session.close()
-        return jsonify({'message': 'there has been an eror!'}), 500
+        os.mkdir(path)
+    except OSError:
+        print("Creation of the directory %s failed" % path)
+    else:
+        print("Successfully created the directory %s " % path)
+    return path
 
 
-@app.route('/getUserName', methods=['GET'])
-@token_required
-def get_user_name(current_user):
+def create_directory_for_dataset(dataset_name):
     try:
-        name = current_user.FName + " " + current_user.LName
-        db.session.close()
-        return jsonify({'Name': name})
-    except:
-        db.session.close()
-        return jsonify({'message': 'problem with data'}), 403
+        os.mkdir(os.path.join(DATASETS_ROOT, dataset_name))
+    except OSError:
+        print("Creation of the directory %s failed" % dataset_name)
+    else:
+        print("Successfully created the directory %s " % dataset_name)
+    return dataset_name
 
 
-@app.route('/getEmail', methods=['GET'])
-@token_required
-def get_email(current_user):
+def create_directory(dataset_name, discretization_id, kl_id):
+    path = DATASETS_ROOT + '/' + dataset_name + "/" + discretization_id + "/" + kl_id
     try:
-        email = current_user.Email
-        print("get email request, email=" + email)
-        db.session.close()
-        return jsonify({'Email': email})
-    except:
-        db.session.close()
-        return jsonify({'message': 'problem with data'}), 403
+        os.mkdir(path)
+    except OSError:
+        print("Creation of the directory %s failed" % path)
+    else:
+        print("Successfully created the directory %s " % path)
+    return path
 
 
-# this function asks for permission, it takes one argument in the url
-# which is the name of the dataset like "dataset=datasetName"
-@app.route('/askPermission', methods=['GET'])
-@token_required
-def ask_permission(current_user):
+def create_disc_zip(disc_path, zip_name, files_to_zip):
+    with zipfile.ZipFile(os.path.join(disc_path, zip_name), mode='w') as zipped_disc:
+        for file in files_to_zip:
+            file_path = os.path.join(disc_path, file)
+            zipped_disc.write(file_path, os.path.basename(file_path))
+
+
+def unzip(from_path, to_path, file_name):
+    with zipfile.ZipFile(from_path + '/' + file_name, 'r') as zip_ref:
+        zip_ref.extractall(to_path)
+
+
+def delete_not_necessary(directory_path):
+    for filename in os.listdir(directory_path):
+        if filename.endswith(".txt"):
+            continue
+        else:
+            os.remove(filename)
+# </editor-fold>
+
+
+# <editor-fold desc="Users Module">
+# post reqeust that gets a json with 'Email',
+# 'Nickname'(optional), 'Password', 'Lname', 'Fname'
+@app.route('/register', methods=['POST'])
+def create_user():
     try:
-        dataset_name = request.args.get('dataset')
-        dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
-        owner_email = dataset.owner.Email
-        ask = ask_permissions(owner=current_user, dataset=dataset)
-        db.session.add(ask)
+        data = request.form
+        if check_email.check(data['Email']):
+            return jsonify({'message': 'email is not valid'}), 400
+        double_user = Users.query.filter_by(Email=data['Email']).first()
+        if double_user:
+            db.session.close()
+            print("hello")
+            return jsonify({'message': 'there is already a user with that Email'}), 400
+        hashed_password = generate_password_hash(data['Password'], method='sha256')
+        new_user = Users(
+            degree=data["Degree"],
+            Email=data['Email'],
+            FName=data['Fname'],
+            institute=data["Institute"],
+            LName=data['Lname'],
+            Password=hashed_password)
+        db.session.add(new_user)
         db.session.commit()
-        try:
-            notify_by_email.send_an_email(
-                message=f"Subject: A user with the email "
-                        + current_user.Email
-                        + " has asked for permission to use \""
-                        + dataset_name + "\"",
-                receiver_email=owner_email)
-        except:
-            return jsonify({'message': 'cannot send an email!'}), 409
-        db.session.close()
-        return jsonify({'message': 'permission asked!'})
+        notify_by_email.send_an_email(
+            message=f"Subject: registration successfully completed",
+            receiver_email=data['Email'])
     except:
+        db.session.rollback()
+        db.session.close()
         return jsonify({'message': 'problem with data'}), 400
+    db.session.close()
+    return jsonify({'message': 'New user created!'})
 
 
+# gets 'Email' and 'Password' and gives back a token than you should.
+# send with key value like x-access-token in the header
+@app.route('/login', methods=['POST'])
+def login():
+    # try:
+    data = request.form
+    if 'Email' not in data or 'Password' not in data:
+        return make_response('you didnt give me Email or Password', 400)
+    user = Users.query.filter_by(Email=data['Email']).first()
+    print(user)
+    if not user:
+        db.session.close()
+        return make_response({'message': 'Email is not correct'}, 400)
+    if check_password_hash(user.Password, data['Password']):
+        token = jwt.encode(
+            {'Email': user.Email, 'exp': (datetime.datetime.utcnow() + datetime.timedelta(minutes=3000))},
+            app.config['SECRET_KEY'], algorithm='HS256')
+        db.session.close()
+        return jsonify({'token': token.decode('UTF-8')})
+    else:
+        db.session.close()
+        return jsonify({'message': 'wrong password'}), 400
+    # except:
+    #     db.session.close()
+    #     return jsonify({'message': 'problem with data 2'}), 400
+# </editor-fold>
+
+
+# <editor-fold desc="Mail Module">
 # brings all the data you need to load the mail
 @app.route('/loadMail', methods=['GET'])
 @token_required
@@ -355,6 +415,33 @@ def load_mail(current_user):
         return jsonify({'message': 'there has been an error!'}), 500
 
 
+# this function asks for permission, it takes one argument in the url
+# which is the name of the dataset like "dataset=datasetName"
+@app.route('/askPermission', methods=['GET'])
+@token_required
+def ask_permission(current_user):
+    try:
+        dataset_name = request.args.get('dataset')
+        dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
+        owner_email = dataset.owner.Email
+        ask = ask_permissions(owner=current_user, dataset=dataset)
+        db.session.add(ask)
+        db.session.commit()
+        try:
+            notify_by_email.send_an_email(
+                message=f"Subject: A user with the email "
+                        + current_user.Email
+                        + " has asked for permission to use \""
+                        + dataset_name + "\"",
+                receiver_email=owner_email)
+        except:
+            return jsonify({'message': 'cannot send an email!'}), 409
+        db.session.close()
+        return jsonify({'message': 'permission asked!'})
+    except:
+        return jsonify({'message': 'problem with data'}), 400
+
+
 # takes 2 arguments in the url, 'dataset' and 'userEmail' and gives a user a permission
 @app.route('/acceptPermission', methods=['GET'])
 @token_required
@@ -405,91 +492,10 @@ def reject_permission(current_user):
         return jsonify({'message': 'permission accepted!'})
     except:
         return jsonify({'message': 'there has been an error!'}), 500
+# </editor-fold>
 
 
-# sends all the info about the data sets
-@app.route('/getAllDataSets', methods=['GET'])
-def get_all_datasets():
-    try:
-        datasets = info_about_datasets.query.all()
-        to_return = {}
-        x = 0
-        to_return["lengthNum"] = len(datasets)
-        for curr_dataset in datasets:
-            full_name = curr_dataset.owner.FName + " " + curr_dataset.owner.LName
-            to_return[str(x)] = {
-                "Category": curr_dataset.category,
-                "DatasetName": curr_dataset.Name,
-                "Owner": full_name,
-                "PublicPrivate": curr_dataset.public_private,
-                "Size": str(curr_dataset.size)}
-            x = x + 1
-        db.session.close()
-        return jsonify(to_return)
-    except:
-        db.session.close()
-        return jsonify({'message': 'there has been an error!'}), 500
-
-
-def check_exists(disc, epsilon, max_gap, vertical_support, num_relations, index_same, max_tirp_length):
-    exists = karma_lego.query.filter_by(
-        discretization=disc,
-        epsilon=epsilon,
-        index_same=index_same,
-        max_gap=max_gap,
-        max_tirp_length=max_tirp_length,
-        min_ver_support=vertical_support,
-        num_relations=num_relations).first()
-    if exists is None:
-        return False
-    return True
-
-
-def check_if_already_exists(dataset, paa, ab_method, num_states, interpolation_gap, gradient_file_name,
-                            knowledge_based_file_name):
-    exists = discretization.query.filter_by(
-        AbMethod=ab_method,
-        dataset=dataset,
-        GradientFile_name=gradient_file_name,
-        InterpolationGap=interpolation_gap,
-        KnowledgeBasedFile_name=knowledge_based_file_name,
-        NumStates=num_states,
-        PAA=paa).first()
-    if exists is None:
-        return False
-    return True
-
-
-def get_dataset_name(disc):
-    dataset = disc.dataset
-    dataset_name = dataset.Name
-    return dataset_name
-
-
-def create_directory_disc(dataset_name, discretization_id):
-    path = DATASETS_ROOT + '/' + dataset_name + "/" + discretization_id
-    try:
-        os.mkdir(path)
-    except OSError:
-        print("Creation of the directory %s failed" % path)
-    else:
-        print("Successfully created the directory %s " % path)
-    return path
-
-
-def unzip(from_path, to_path, file_name):
-    with zipfile.ZipFile(from_path + '/' + file_name, 'r') as zip_ref:
-        zip_ref.extractall(to_path)
-
-
-def delete_not_necessary(directory_path):
-    for filename in os.listdir(directory_path):
-        if filename.endswith(".txt"):
-            continue
-        else:
-            os.remove(filename)
-
-
+# <editor-fold desc="Validations">
 def check_non_negative_int(s):
     try:
         return int(s) >= 0
@@ -708,6 +714,24 @@ def validate_classes_in_raw_data(raw_data_path):
     return len(entity_list) == 0
 
 
+def check_if_not_int(num):
+    num1 = float(num)
+    if num1.is_integer() and num1 > 1:
+        return False
+    else:
+        return True
+
+
+def check_if_not_int_but_0(num):
+    num1 = float(num)
+    if num1.is_integer() and num1 > -1:
+        return False
+    else:
+        return True
+# </editor-fold>
+
+
+# <editor-fold desc="Discretization Module">
 @app.route('/addNewDisc', methods=['POST'])
 @token_required
 def add_new_disc(current_user):
@@ -935,67 +959,6 @@ def run_hugobot(config):
     os.system(command)
 
 
-def create_directory_for_dataset(dataset_name):
-    try:
-        os.mkdir(os.path.join(DATASETS_ROOT, dataset_name))
-    except OSError:
-        print("Creation of the directory %s failed" % dataset_name)
-    else:
-        print("Successfully created the directory %s " % dataset_name)
-    return dataset_name
-
-
-def create_directory(dataset_name, discretization_id, kl_id):
-    path = DATASETS_ROOT + '/' + dataset_name + "/" + discretization_id + "/" + kl_id
-    try:
-        os.mkdir(path)
-    except OSError:
-        print("Creation of the directory %s failed" % path)
-    else:
-        print("Successfully created the directory %s " % path)
-    return path
-
-
-def check_for_bad_user(kl, user_id):
-    if kl.discretization.dataset.owner.Email == user_id:
-        return False
-    else:
-        return True
-
-
-def check_for_bad_user_disc(disc, user_id):
-    if disc.dataset.owner.Email == user_id:
-        return False
-    else:
-        return True
-
-
-@app.route('/getTIM', methods=['POST'])
-# @token_required
-def get_TIM():
-    try:
-        data = request.form
-        kl_id = data["kl_id"]
-        class_num = data["class_num"]
-        KL = karma_lego.query.filter_by(id=kl_id).first()
-        # if (check_for_bad_user(KL, current_user.Email)):
-        #  return jsonify({'message': 'dont try to fool me, you dont own it!'}), 403
-        disc = KL.discretization.id
-        dataset = KL.discretization.dataset.Name
-        db.session.close()
-        return send_file(DATASETS_ROOT + "/" + dataset + '/' + disc + '/' + kl_id + '/' + class_num)
-    except:
-        db.session.close()
-        return jsonify({'message': 'there is no such file to download'}), 404
-
-
-def create_disc_zip(disc_path, zip_name, files_to_zip):
-    with zipfile.ZipFile(os.path.join(disc_path, zip_name), mode='w') as zipped_disc:
-        for file in files_to_zip:
-            file_path = os.path.join(disc_path, file)
-            zipped_disc.write(file_path, os.path.basename(file_path))
-
-
 @app.route('/getDISC', methods=['POST'])
 @token_required
 def get_disc(current_user):
@@ -1029,48 +992,19 @@ def get_disc(current_user):
     create_disc_zip(disc_path, disc_zip_name, files_to_send)
 
     return send_file(os.path.join(disc_path, disc_zip_name))
+# </editor-fold>
 
 
-@app.route('/getDatasetFiles', methods=['GET'])
-@token_required
-def get_dataset_files(current_user):
-    dataset_name = request.args.get('dataset_id')
-
-    dataset_path = os.path.join(DATASETS_ROOT, dataset_name)
-
-    if os.path.exists(dataset_path):
-        files_to_send = [dataset_name + ".csv", "VMap.csv"]
-        if os.path.exists(os.path.join(dataset_path, "Entities.csv")):
-            files_to_send.append("Entities.csv")
-    else:
-        return jsonify({'message': 'cannot find the requested data file in the server'}), 500
-
-    data_zip_name = dataset_name + ".zip"
-
-    create_disc_zip(dataset_path, data_zip_name, files_to_send)
-
-    return send_file(os.path.join(dataset_path, data_zip_name))
-
-
-def check_if_not_int(num):
-    num1 = float(num)
-    if num1.is_integer() and num1 > 1:
-        return False
-    else:
-        return True
-
-
-def check_if_not_int_but_0(num):
-    num1 = float(num)
-    if num1.is_integer() and num1 > -1:
-        return False
-    else:
-        return True
+# <editor-fold desc="Time Intervals Mining Module">
+def get_dataset_name(disc):
+    dataset = disc.dataset
+    dataset_name = dataset.Name
+    return dataset_name
 
 
 @app.route('/addTIM', methods=['POST'])
 @token_required
-def add_TIM(current_user):
+def add_tim(current_user):
     try:
         data = request.form
         if check_if_not_int_but_0(data['Epsilon']):
@@ -1178,78 +1112,27 @@ def add_TIM(current_user):
         return jsonify({'message': 'problem with data'}), 404
 
 
-# post reqeust that gets a json with 'Email',
-# 'Nickname'(optional), 'Password', 'Lname', 'Fname'
-@app.route('/register', methods=['POST'])
-def create_user():
+@app.route('/getTIM', methods=['POST'])
+# @token_required
+def get_tim():
     try:
         data = request.form
-        if check_email.check(data['Email']):
-            return jsonify({'message': 'email is not valid'}), 400
-        double_user = Users.query.filter_by(Email=data['Email']).first()
-        if double_user:
-            db.session.close()
-            print("hello")
-            return jsonify({'message': 'there is already a user with that Email'}), 400
-        hashed_password = generate_password_hash(data['Password'], method='sha256')
-        new_user = Users(
-            degree=data["Degree"],
-            Email=data['Email'],
-            FName=data['Fname'],
-            institute=data["Institute"],
-            LName=data['Lname'],
-            Password=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
-        notify_by_email.send_an_email(
-            message=f"Subject: registration successfully completed",
-            receiver_email=data['Email'])
+        kl_id = data["kl_id"]
+        class_num = data["class_num"]
+        KL = karma_lego.query.filter_by(id=kl_id).first()
+        # if (check_for_bad_user(KL, current_user.Email)):
+        #  return jsonify({'message': 'dont try to fool me, you dont own it!'}), 403
+        disc = KL.discretization.id
+        dataset = KL.discretization.dataset.Name
+        db.session.close()
+        return send_file(DATASETS_ROOT + "/" + dataset + '/' + disc + '/' + kl_id + '/' + class_num)
     except:
-        db.session.rollback()
         db.session.close()
-        return jsonify({'message': 'problem with data'}), 400
-    db.session.close()
-    return jsonify({'message': 'New user created!'})
+        return jsonify({'message': 'there is no such file to download'}), 404
+# </editor-fold>
 
 
-# gets 'Email' and 'Password' and gives back a token than you should.
-# send with key value like x-access-token in the header
-@app.route('/login', methods=['POST'])
-def login():
-    # try:
-    data = request.form
-    if 'Email' not in data or 'Password' not in data:
-        return make_response('you didnt give me Email or Password', 400)
-    user = Users.query.filter_by(Email=data['Email']).first()
-    print(user)
-    if not user:
-        db.session.close()
-        return make_response({'message': 'Email is not correct'}, 400)
-    if check_password_hash(user.Password, data['Password']):
-        token = jwt.encode(
-            {'Email': user.Email, 'exp': (datetime.datetime.utcnow() + datetime.timedelta(minutes=3000))},
-            app.config['SECRET_KEY'], algorithm='HS256')
-        db.session.close()
-        return jsonify({'token': token.decode('UTF-8')})
-    else:
-        db.session.close()
-        return jsonify({'message': 'wrong password'}), 400
-    # except:
-    #     db.session.close()
-    #     return jsonify({'message': 'problem with data 2'}), 400
-
-
-@app.route("/")
-@app.route("/home")
-def home():
-    return "<h1>Home Page</h1>"
-
-
-@app.route("/about")
-def about():
-    return "<h1>About Page</h1>"
-
-
+# <editor-fold desc="Upload Dataset Module">
 @app.route("/stepone", methods=["POST"])
 @token_required
 def upload_stepone(current_user):
@@ -1368,6 +1251,22 @@ def upload_steptwo(current_user):
     return jsonify({'message': 'VMap Registered Successfully!'})
 
 
+@app.route("/getVariableList", methods=["GET"])
+def get_variable_list_request():
+    try:
+        dataset_name = request.args.get("dataset_id")
+        print(dataset_name)
+        dataset_path = os.path.join(DATASETS_ROOT, dataset_name, dataset_name + '.csv')
+        column_in_data = 1
+        list_to_return = get_variable_list(dataset_path, column_in_data)
+        list_to_return = [int(x) for x in list_to_return]
+        list_to_return = sorted(list_to_return)
+        return jsonify({'VMapList': list_to_return})
+    except IOError:
+        return jsonify({'message': 'a variable list for an unknown dataset has been received.'
+                                   ' please check your request and try again.'}), 400
+
+
 @app.route("/steptwocreate", methods=['POST'])
 @token_required
 def step_two_create(current_user):
@@ -1447,77 +1346,15 @@ def upload_stepthree(current_user):
         return jsonify({'message': 'problem with data'}), 400
     db.session.close()
     return jsonify({'message': 'Dataset upload done!'}), 200
+# </editor-fold>
 
 
-@app.route("/incrementDownload", methods=["POST"])
-def increment_download():
-    dataset_name = request.args.get('dataset_id')
-    dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
-    download = dataset.downloads + 1
-    dataset.downloads = download
-    db.session.commit()
-    db.session.close()
-    return jsonify({'message': 'success', 'downloads': download}), 200
-
-
-@app.route("/incrementViews", methods=["POST"])
-def increment_views():
-    dataset_name = request.args.get('dataset_id')
-    dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
-    views = dataset.views + 1
-    dataset.views = views
-    db.session.commit()
-    db.session.close()
-    return jsonify({'message': 'success', 'views': views}), 200
-
-
-@app.route("/getInfo", methods=["GET"])
-def get_all_info_on_dataset():
-    dataset_name = request.args.get("id")
-    info = info_about_datasets.query.filter_by(Name=dataset_name).first()
-    print(info.Name)
-    return jsonify(
-        {"category": info.category,
-         "Description": info.Description,
-         "downloads": info.downloads,
-         "Name": info.Name,
-         "owner_name": info.Email,
-         "size": str(info.size) + " MB",
-         "source": info.source,
-         "views": info.views}), 200
-
-
+# <editor-fold desc="Visualization Files">
 @app.route("/getRawDataFile", methods=["GET"])
 def get_raw_data_file():
     dataset_name = request.args.get("id")
     print(dataset_name)
     return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + dataset_name + '.csv'), 200
-
-
-@app.route("/getVariableList", methods=["GET"])
-def get_variable_list_request():
-    try:
-        dataset_name = request.args.get("dataset_id")
-        print(dataset_name)
-        dataset_path = os.path.join(DATASETS_ROOT, dataset_name, dataset_name + '.csv')
-        column_in_data = 1
-        list_to_return = get_variable_list(dataset_path, column_in_data)
-        list_to_return = [int(x) for x in list_to_return]
-        list_to_return = sorted(list_to_return)
-        return jsonify({'VMapList': list_to_return})
-    except IOError:
-        return jsonify({'message': 'a variable list for an unknown dataset has been received.'
-                                   ' please check your request and try again.'}), 400
-
-
-@app.route("/getVMapFile", methods=["GET"])
-def get_vmap_file():
-    try:
-        dataset_name = request.args.get("id")
-        print(dataset_name)
-        return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + 'VMap.csv'), 200
-    except FileNotFoundError:
-        return jsonify({'message': 'the request VMap file cannot be found.'}), 404
 
 
 @app.route("/getEntitiesFile", methods=["GET"])
@@ -1554,6 +1391,180 @@ def get_kl_file():
         return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + disc_name + '/' + kl_name + '/KL.txt'), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request KarmaLego output file cannot be found.'}), 404
+# </editor-fold>
+
+
+@app.route("/incrementViews", methods=["POST"])
+def increment_views():
+    dataset_name = request.args.get('dataset_id')
+    dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
+    views = dataset.views + 1
+    dataset.views = views
+    db.session.commit()
+    db.session.close()
+    return jsonify({'message': 'success', 'views': views}), 200
+
+
+@app.route("/incrementDownload", methods=["POST"])
+def increment_download():
+    dataset_name = request.args.get('dataset_id')
+    dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
+    download = dataset.downloads + 1
+    dataset.downloads = download
+    db.session.commit()
+    db.session.close()
+    return jsonify({'message': 'success', 'downloads': download}), 200
+
+
+@app.route('/getUserName', methods=['GET'])
+@token_required
+def get_user_name(current_user):
+    try:
+        name = current_user.FName + " " + current_user.LName
+        db.session.close()
+        return jsonify({'Name': name})
+    except:
+        db.session.close()
+        return jsonify({'message': 'problem with data'}), 403
+
+
+@app.route('/getEmail', methods=['GET'])
+@token_required
+def get_email(current_user):
+    try:
+        email = current_user.Email
+        print("get email request, email=" + email)
+        db.session.close()
+        return jsonify({'Email': email})
+    except:
+        db.session.close()
+        return jsonify({'message': 'problem with data'}), 403
+
+
+# sends all the info about the data sets
+@app.route('/getAllDataSets', methods=['GET'])
+def get_all_datasets():
+    try:
+        datasets = info_about_datasets.query.all()
+        to_return = {}
+        x = 0
+        to_return["lengthNum"] = len(datasets)
+        for curr_dataset in datasets:
+            full_name = curr_dataset.owner.FName + " " + curr_dataset.owner.LName
+            to_return[str(x)] = {
+                "Category": curr_dataset.category,
+                "DatasetName": curr_dataset.Name,
+                "Owner": full_name,
+                "PublicPrivate": curr_dataset.public_private,
+                "Size": str(curr_dataset.size)}
+            x = x + 1
+        db.session.close()
+        return jsonify(to_return)
+    except:
+        db.session.close()
+        return jsonify({'message': 'there has been an error!'}), 500
+
+
+@app.route("/getInfo", methods=["GET"])
+def get_all_info_on_dataset():
+    dataset_name = request.args.get("id")
+    info = info_about_datasets.query.filter_by(Name=dataset_name).first()
+    print(info.Name)
+    return jsonify(
+        {"category": info.category,
+         "Description": info.Description,
+         "downloads": info.downloads,
+         "Name": info.Name,
+         "owner_name": info.Email,
+         "size": str(info.size) + " MB",
+         "source": info.source,
+         "views": info.views}), 200
+
+
+@app.route('/getDataOnDataset', methods=['GET'])
+@token_required
+def get_data_on_dataset(current_user):
+    try:
+        dataset_name = request.args.get("id")
+        print(current_user)
+        if check_for_authorization(current_user, dataset_name):
+            return jsonify({'message': 'dont try to fool me, you dont own it!'}), 403
+        discretizations = discretization.query.filter_by(dataset_Name=dataset_name).all()
+        disc_to_return = {}
+        x = 0
+        num = 0
+        disc_to_return["lengthNum"] = len(discretizations)
+        karma_arr = []
+        for curr_disc in discretizations:
+            karma_arr.append(karma_lego.query.filter_by(discretization=curr_disc).all())
+            num = num + len(karma_arr[x])
+            disc_to_return[str(x)] = {
+                "BinsNumber": str(curr_disc.NumStates),
+                "id": str(curr_disc.id),
+                "InterpolationGap": str(curr_disc.InterpolationGap),
+                "MethodOfDiscretization": str(curr_disc.AbMethod),
+                "PAAWindowSize": str(curr_disc.PAA)}
+            x = x + 1
+        x = 0
+        karma_to_return = {"lengthNum": num}
+
+        for karma in karma_arr:
+            for curr_karma in karma:
+                if curr_karma.index_same:
+                    i_s = "true"
+                else:
+                    i_s = "false"
+                karma_to_return[str(x)] = {
+                    "BinsNumber": str(curr_karma.discretization.NumStates),
+                    "discId": curr_karma.discretization.id,
+                    "epsilon": str(curr_karma.epsilon),
+                    "indexSame": i_s,
+                    "InterpolationGap": str(curr_karma.discretization.InterpolationGap),
+                    "karma_id": str(curr_karma.id),
+                    "MaxGap": str(curr_karma.max_gap),
+                    "maxTirpLength": str(curr_karma.max_tirp_length),
+                    "MethodOfDiscretization": str(curr_karma.discretization.AbMethod),
+                    "numRelations": str(curr_karma.num_relations),
+                    "PAAWindowSize": str(curr_karma.discretization.PAA),
+                    "VerticalSupport": str(curr_karma.min_ver_support)}
+                x = x + 1
+        to_return = {"disc": disc_to_return, "karma": karma_to_return}
+        db.session.close()
+        return jsonify(to_return)
+    except:
+        db.session.close()
+        return jsonify({'message': 'there has been an eror!'}), 500
+
+
+@app.route('/getDatasetFiles', methods=['GET'])
+@token_required
+def get_dataset_files(current_user):
+    dataset_name = request.args.get('dataset_id')
+
+    dataset_path = os.path.join(DATASETS_ROOT, dataset_name)
+
+    if os.path.exists(dataset_path):
+        files_to_send = [dataset_name + ".csv", "VMap.csv"]
+        if os.path.exists(os.path.join(dataset_path, "Entities.csv")):
+            files_to_send.append("Entities.csv")
+    else:
+        return jsonify({'message': 'cannot find the requested data file in the server'}), 500
+
+    data_zip_name = dataset_name + ".zip"
+
+    create_disc_zip(dataset_path, data_zip_name, files_to_send)
+
+    return send_file(os.path.join(dataset_path, data_zip_name))
+
+
+@app.route("/getVMapFile", methods=["GET"])
+def get_vmap_file():
+    try:
+        dataset_name = request.args.get("id")
+        print(dataset_name)
+        return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + 'VMap.csv'), 200
+    except FileNotFoundError:
+        return jsonify({'message': 'the request VMap file cannot be found.'}), 404
 
 
 @app.route("/getExampleFile", methods=["GET"])
@@ -1566,6 +1577,17 @@ def get_example_file():
         return send_file(file_path), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request file cannot be found.'}), 404
+
+
+@app.route("/")
+@app.route("/home")
+def home():
+    return "<h1>Home Page</h1>"
+
+
+@app.route("/about")
+def about():
+    return "<h1>About Page</h1>"
 
 
 @app.route("/razTest", methods=["GET"])
