@@ -12,6 +12,7 @@ import jwt
 from KarmaLego_Framework import RunKarmaLego
 import notify_by_email
 import os
+import sys
 import time
 import uuid
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -924,9 +925,58 @@ def add_new_disc(current_user):
         config["num_bins"] = " " + str(NumStates)
 
     run_hugobot(config)
+
+    for filename in os.listdir(disc_path):
+        if filename.endswith(".txt"):
+            kl_input_path = os.path.join(disc_path, filename)
+            kl_processed_input = filename.replace(".txt", "_processed.txt")
+            kl_processed_input_path = os.path.join(disc_path, kl_processed_input)
+            parse_kl_input(kl_input_path, kl_processed_input_path)
+
+            os.remove(kl_input_path)
+            os.rename(kl_processed_input_path,kl_input_path)
     # </editor-fold>
 
     return "success!"
+
+
+def parse_kl_input(input_path, output_path):
+    index = 0
+    file = open(input_path, "r+")
+    t = open(output_path, "w")
+    t.write(file.readline())  # startToncepts
+    t.write(file.readline())  # numberOfEntities
+    entity_id_line = file.readline()
+    while entity_id_line:
+        entity_details_line = file.readline()
+        var_min, var_max = find_max_and_min(entity_details_line)
+        entity_id_line = \
+            entity_id_line[0:entity_id_line.index(';')] + ',' + \
+            str(index) + ';' + \
+            var_min + ';' + \
+            var_max + '\n'
+        t.write(entity_id_line)
+        t.write(entity_details_line)
+        entity_id_line = file.readline()
+        index += 1
+    file.close()
+
+
+def find_max_and_min(line):
+    var_min = sys.maxsize
+    var_max = -sys.maxsize
+    line_arr = line.split(";")
+    for sec in line_arr:
+        sec_arr = sec.split(",")
+        if len(sec_arr) != 4:
+            continue
+        start_time = int(sec_arr[0])
+        if start_time < var_min:
+            var_min = start_time
+        end_time = int(sec_arr[1])
+        if end_time > var_max:
+            var_max = end_time
+    return str(0), str(var_max)
 
 
 def run_hugobot(config):
@@ -1388,6 +1438,8 @@ def get_kl_file():
         print(disc_name)
         kl_name = request.args.get("kl_id")
         print(kl_name)
+        if "class" in request.args.keys():
+            kl_class = request.args.get("class")
         return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + disc_name + '/' + kl_name + '/KL.txt'), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request KarmaLego output file cannot be found.'}), 404
@@ -1592,7 +1644,9 @@ def about():
 
 @app.route("/razTest", methods=["GET"])
 def raz_test():
-    return "true", 200
+    razzie = request.args.get("var1")
+    razzie2 = request.args.get("var2")
+    return razzie + " " + razzie2, 200
 
 
 if __name__ == '__main__':
