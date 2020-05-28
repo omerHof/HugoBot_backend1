@@ -1128,8 +1128,6 @@ def add_tim(current_user):
                     semicolon_end=semicolon_end,
                     skip_followers=skip_followers,
                     time_intervals_path=path)
-                # if not print_output_incrementally:
-                lego_0.print_frequent_tirps(out_path)
             else:
                 continue
         if ((os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + 'KL.txt'))
@@ -1440,7 +1438,15 @@ def get_kl_file():
         print(kl_name)
         if "class" in request.args.keys():
             kl_class = request.args.get("class")
-        return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + disc_name + '/' + kl_name + '/KL.txt'), 200
+            return send_file(DATASETS_ROOT + '/' +
+                             dataset_name + '/' +
+                             disc_name + '/' +
+                             kl_name + '/' +
+                             'KL-class-' + kl_class + '.0.txt'), 200
+        return send_file(DATASETS_ROOT + '/' +
+                         dataset_name + '/' +
+                         disc_name + '/' +
+                         kl_name + '/KL.txt'), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request KarmaLego output file cannot be found.'}), 404
 # </editor-fold>
