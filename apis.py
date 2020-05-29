@@ -163,8 +163,7 @@ def empty_string():
 def check_for_authorization(current_user, dataset_name):
     per = Permissions.query.filter_by(name_of_dataset=dataset_name, Email=current_user.Email).first()
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
-
-    if dataset.public_private == "public":
+    if dataset.public_private == "Public":
         return False
 
     if (per is None or current_user.Email != per.owner.Email) and (dataset.owner.Email != current_user.Email):
@@ -354,6 +353,21 @@ def load_mail(current_user):
                 "PublicPrivate": curr_dataset.public_private,
                 "Size": str(curr_dataset.size)}
             x = x + 1
+        datasets = info_about_datasets.query.all()
+        to_return["tablesToExplore"] = {}
+        x = 0
+        for curr_dataset in datasets:
+            print(curr_dataset.public_private)
+            if curr_dataset.public_private != 'Public':
+                full_name = curr_dataset.owner.FName + " " + curr_dataset.owner.LName
+                to_return["tablesToExplore"][str(x)] = {
+                    "Category": curr_dataset.category,
+                    "DatasetName": curr_dataset.Name,
+                    "Owner": full_name,
+                    "PublicPrivate": curr_dataset.public_private,
+                    "Size": str(curr_dataset.size)}
+                x = x + 1
+        to_return["tablesToExploreLen"] = x
         users_permissions = Permissions.query.filter_by(Email=current_user.Email).all()
         to_return["myPermissions"] = {}
         to_return["myPermissionsLen"] = len(users_permissions)
@@ -408,7 +422,7 @@ def load_mail(current_user):
                 x = x + 1
         print(to_return["approve"])
         to_return["approveLen"] = counter
-
+        print(to_return["tablesToExplore"])
         to_return['Email'] = current_user.Email
         db.session.close()
         return jsonify(to_return)
@@ -426,8 +440,8 @@ def ask_permission(current_user):
         dataset_name = request.args.get('dataset')
         dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
         owner_email = dataset.owner.Email
-        ask = ask_permissions(owner=current_user, dataset=dataset)
-        db.session.add(ask)
+        ask1 = ask_permissions(Email=current_user.Email, name_of_dataset=dataset_name)
+        db.session.add(ask1)
         db.session.commit()
         try:
             notify_by_email.send_an_email(
@@ -439,8 +453,10 @@ def ask_permission(current_user):
         except:
             return jsonify({'message': 'cannot send an email!'}), 409
         db.session.close()
+
         return jsonify({'message': 'permission asked!'})
     except:
+        db.session.close()
         return jsonify({'message': 'problem with data'}), 400
 
 
