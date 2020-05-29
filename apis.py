@@ -30,6 +30,7 @@ SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
 DATASETS_ROOT = SERVER_ROOT + '/Datasets'
 RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
 VMAP_HEADER_FORMAT = ["Variable ID", "Variable Name", "Description"]
+VMAP_HEADER_FORMAT_2 = ["TemporalPropertyID", "TemporalPropertyName", "Description"]
 GRADIENT_HEADER_FORMAT = ["StateID", "TemporalPropertyID", "Method", "BinID", "BinLow", "BinHigh", "BinLowScore"]
 KB_HEADER_FORMAT = ["StateID", "TemporalPropertyID", "Method", "BinID", "BinLow", "BinHigh"]
 HUGOBOT_EXECUTABLE_PATH = "HugoBot-beta-release-v1.1.5_03-01-2020/cli.py"
@@ -581,6 +582,12 @@ def validate_vmap_header(vmap_path):
                 if variable_id_to_compare == VMAP_HEADER_FORMAT[0]:
                     if header[1] == VMAP_HEADER_FORMAT[1]:
                         if header[2] == VMAP_HEADER_FORMAT[2]:
+                            return True
+
+            if len(header) == len(VMAP_HEADER_FORMAT_2):
+                if variable_id_to_compare == VMAP_HEADER_FORMAT_2[0]:
+                    if header[1] == VMAP_HEADER_FORMAT_2[1]:
+                        if header[2] == VMAP_HEADER_FORMAT_2[2]:
                             return True
             return False
 
@@ -1635,24 +1642,6 @@ def get_example_file():
         return send_file(file_path), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request file cannot be found.'}), 404
-
-
-@app.route("/")
-@app.route("/home")
-def home():
-    return "<h1>Home Page</h1>"
-
-
-@app.route("/about")
-def about():
-    return "<h1>About Page</h1>"
-
-
-@app.route("/razTest", methods=["GET"])
-def raz_test():
-    razzie = request.args.get("var1")
-    razzie2 = request.args.get("var2")
-    return razzie + " " + razzie2, 200
 
 
 if __name__ == '__main__':

@@ -1,0 +1,45 @@
+TemporalPropertyID,TemporalPropertyName,Description
+-1,sepsis class,"1-sepsis, 0- no sepsis"
+753626,Propofol,Propofol
+1234567,Phenylephrine 2.5% opth 2.5%+Norepinephrine+1234567,Phenylephrine 2.5% opth 2.5%+Norepinephrine+1234567
+3024171,High Resp. Rate,High Resp. Rate
+3027018,Heart Rate,Heart Rate
+3012888,Arterial BP [Diastolic],Arterial BP [Diastolic]
+3004249,Arterial BP [Systolic],Arterial BP [Systolic]
+3027598,Arterial BP Mean,Arterial BP Mean
+3016502,O2 saturation pulseoxymetry,O2 saturation pulseoxymetry
+3020891,Temperature F,Temperature F
+3014080,O2 Flow (lpm),O2 Flow (lpm)
+3020716,FIO2,FIO2
+3016226,PEEP set,PEEP set
+21490753,Minute Volume,Minute Volume
+3028354,Mean Airway Pressure,Mean Airway Pressure
+21490854,Tidal Volume (observed),Tidal Volume (observed)
+21490650,Peak Insp. Pressure,Peak Insp. Pressure
+3017594,Tidal Volume (spontaneous),Tidal Volume (spontaneous)
+3000963,Hemoglobin,Hemoglobin
+3003282,Leukocytes [#/volume] in Blood by Manual count,Leukocytes [#/volume] in Blood by Manual count
+3037278,Anion gap 4 in Serum or Plasma,Anion gap 4 in Serum or Plasma
+3023103,Potassium serum/plasma,Potassium serum/plasma
+3016723,Creatinine serum/plasma,Creatinine serum/plasma
+3014576,Chloride serum/plasma,Chloride serum/plasma
+3013682,Urea nitrogen serum/plasma,Urea nitrogen serum/plasma
+3024929,Platelets [#/volume] in Blood by Automated count,Platelets [#/volume] in Blood by Automated count
+3004501,Glucose lab,Glucose lab
+3016293,Bicarbonate [Moles/volume] in Serum or Plasma,Bicarbonate [Moles/volume] in Serum or Plasma
+3011904,Phosphate,Phosphate
+3015377,Calcium [Moles/volume] in Serum or Plasma,Calcium [Moles/volume] in Serum or Plasma
+3022217,INR,INR
+3034962,Glucose finger stick,Glucose finger stick
+3010421,pH (acidity) in blood,pH (acidity) in blood
+3013290,Carbon dioxide pressure in blood,Carbon dioxide pressure in blood
+3027315,Oxygen (O2) pressure in blood,Oxygen (O2) pressure in blood
+3012501,Base excess of blood,Base excess of blood
+3047181,Lactate [Moles/volume] in Blood,Lactate [Moles/volume] in Blood
+3024128,Total Bilirubin serum/plasma,Total Bilirubin serum/plasma
+3021119,Calcium.ionized [Moles/volume] in Blood,Calcium.ionized [Moles/volume] in Blood
+3016436,Lactate dehydrogenase [Enzymatic activity/volume] in Serum or Plasma,Lactate dehydrogenase [Enzymatic activity/volume] in Serum or Plasma
+3013502,Oxygen saturation in Blood,Oxygen saturation in Blood
+3007220,Creatine kinase [Enzymatic activity/volume] in Serum or Plasma,Creatine kinase [Enzymatic activity/volume] in Serum or Plasma
+3005456,Potassium [Moles/volume] in Blood,Potassium [Moles/volume] in Blood
+3024629,Glucose urine dipstick,Glucose urine dipstick
