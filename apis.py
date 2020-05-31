@@ -738,6 +738,13 @@ def validate_classes_in_raw_data(raw_data_path):
     return len(entity_list) == 0
 
 
+def validate_file_creation(path, list_of_files):
+    flag = True
+    for file in list_of_files:
+        flag &= os.path.exists(os.path.join(path, file))
+    return flag
+
+
 def check_if_not_int(num):
     num1 = float(num)
     if num1.is_integer() and num1 > 1:
@@ -911,22 +918,6 @@ def add_new_disc(current_user):
         NumStates = 0
     # </editor-fold>
 
-    # <editor-fold desc="Add to DB">
-    disc = discretization(
-        AbMethod=AbMethod,
-        dataset=dataset1,
-        GradientFile_name=GradientFile_name,
-        GradientWindowSize=gradient_window_size,
-        id=disc_id,
-        InterpolationGap=InterpolationGap,
-        KnowledgeBasedFile_name=KnowledgeBasedFile_name,
-        NumStates=NumStates,
-        PAA=PAA)
-    db.session.add(disc)
-    db.session.commit()
-    db.session.close()
-    # </editor-fold>
-
     # <editor-fold desc="Prepare query for HugoBot">
     # os.path.join() won't work here
     dataset_path = DATASETS_ROOT + '/' + dataset_name
@@ -958,6 +949,42 @@ def add_new_disc(current_user):
 
             os.remove(kl_input_path)
             os.rename(kl_processed_input_path,kl_input_path)
+    # </editor-fold>
+
+    # <editor-fold desc="Validate file creation and add to DB">
+    mandatory_files = \
+        ["entity-class-relations.csv",
+         "prop-data.csv",
+         "states.csv",
+         "symbolic-time-series.csv",
+         "KL.txt"]
+    if validate_file_creation(disc_path, mandatory_files):
+        # <editor-fold desc="Add to DB">
+        disc = discretization(
+            AbMethod=AbMethod,
+            dataset=dataset1,
+            GradientFile_name=GradientFile_name,
+            GradientWindowSize=gradient_window_size,
+            id=disc_id,
+            InterpolationGap=InterpolationGap,
+            KnowledgeBasedFile_name=KnowledgeBasedFile_name,
+            NumStates=NumStates,
+            PAA=PAA)
+        db.session.add(disc)
+        db.session.commit()
+        db.session.close()
+        # </editor-fold>
+        notify_by_email.send_an_email(
+            message=f"Subject: A discretization for Your dataset \"" + dataset_name +
+                    "\" has been successfully created",
+            receiver_email=current_user.Email)
+        return "success!", 200
+    else:
+        db.session.close()
+        notify_by_email.send_an_email(
+            message=f"Subject: A problem has occurred with the " +
+                    "discretization you queued for Your dataset \"" + dataset_name + "\". Please try again.",
+            receiver_email=current_user.Email)
     # </editor-fold>
 
     return "success!"
