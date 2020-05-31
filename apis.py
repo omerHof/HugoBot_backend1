@@ -918,6 +918,20 @@ def add_new_disc(current_user):
         NumStates = 0
     # </editor-fold>
 
+    # <editor-fold desc="Add to DB">
+    disc = discretization(
+        AbMethod=AbMethod,
+        dataset=dataset1,
+        GradientFile_name=GradientFile_name,
+        GradientWindowSize=gradient_window_size,
+        id=disc_id,
+        InterpolationGap=InterpolationGap,
+        KnowledgeBasedFile_name=KnowledgeBasedFile_name,
+        NumStates=NumStates,
+        PAA=PAA)
+    db.session.add(disc)
+    # </editor-fold>
+
     # <editor-fold desc="Prepare query for HugoBot">
     # os.path.join() won't work here
     dataset_path = DATASETS_ROOT + '/' + dataset_name
@@ -959,21 +973,8 @@ def add_new_disc(current_user):
          "symbolic-time-series.csv",
          "KL.txt"]
     if validate_file_creation(disc_path, mandatory_files):
-        # <editor-fold desc="Add to DB">
-        disc = discretization(
-            AbMethod=AbMethod,
-            dataset=dataset1,
-            GradientFile_name=GradientFile_name,
-            GradientWindowSize=gradient_window_size,
-            id=disc_id,
-            InterpolationGap=InterpolationGap,
-            KnowledgeBasedFile_name=KnowledgeBasedFile_name,
-            NumStates=NumStates,
-            PAA=PAA)
-        db.session.add(disc)
         db.session.commit()
         db.session.close()
-        # </editor-fold>
         notify_by_email.send_an_email(
             message=f"Subject: A discretization for Your dataset \"" + dataset_name +
                     "\" has been successfully created",
@@ -985,6 +986,7 @@ def add_new_disc(current_user):
             message=f"Subject: A problem has occurred with the " +
                     "discretization you queued for Your dataset \"" + dataset_name + "\". Please try again.",
             receiver_email=current_user.Email)
+        return jsonify({'message': 'a new discretization has been requested, but a problem has occurred.'}), 400
     # </editor-fold>
 
     return "success!"
