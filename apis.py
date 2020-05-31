@@ -112,6 +112,7 @@ class discretization(db.Model):
     KnowledgeBasedFile_name = db.Column(db.String(120))
     GradientFile_name = db.Column(db.String(120))
     GradientWindowSize = db.Column(db.Integer, nullable=False)
+    Finished = db.Column(db.Boolean, nullable=False)
     karma_lego = db.relationship('karma_lego', backref='discretization', lazy='subquery')
     dataset_Name = db.Column(db.String(150), db.ForeignKey('info_about_datasets.Name'), nullable=False)
 
@@ -124,6 +125,7 @@ class karma_lego(db.Model):
     max_gap = db.Column(db.Integer, nullable=False)
     max_tirp_length = db.Column(db.Integer, nullable=False)
     index_same = db.Column(db.Boolean, nullable=False)
+    Finished = db.Column(db.Boolean, nullable=False)
     discretization_name = db.Column(db.String(150), db.ForeignKey('discretization.id'), nullable=False)
 # </editor-fold>
 
@@ -294,9 +296,12 @@ def create_user():
             Password=hashed_password)
         db.session.add(new_user)
         db.session.commit()
-        notify_by_email.send_an_email(
-            message=f"Subject: registration successfully completed",
-            receiver_email=data['Email'])
+        try:
+            notify_by_email.send_an_email(
+                message=f"Subject: registration successfully completed",
+                receiver_email=data['Email'])
+        except:
+            return jsonify({'message': 'cannot send email!.'}), 409
     except:
         db.session.rollback()
         db.session.close()
@@ -479,9 +484,12 @@ def accept_permission(current_user):
         db.session.delete(record)
         db.session.commit()
         db.session.close()
-        notify_by_email.send_an_email(
-            message=f"Subject: You got permission for Dataset " + dataset_name,
-            receiver_email=user_email)
+        try:
+            notify_by_email.send_an_email(
+                message=f"Subject: You got permission for Dataset " + dataset_name,
+                receiver_email=user_email)
+        except:
+            return jsonify({'message': 'cannot send email!.'}), 409
         return jsonify({'message': 'permission accepted!'})
     except:
         return jsonify({'message': 'there has been an error!'}), 500
@@ -504,9 +512,12 @@ def reject_permission(current_user):
         db.session.delete(record)
         db.session.commit()
         db.session.close()
-        notify_by_email.send_an_email(
-            message=f"Subject: Your permission request for Dataset " + dataset_name + " was rejected",
-            receiver_email=user_email)
+        try:
+            notify_by_email.send_an_email(
+                message=f"Subject: Your permission request for Dataset " + dataset_name + " was rejected",
+                receiver_email=user_email)
+        except:
+            return jsonify({'message': 'cannot send email!.'}), 409
         return jsonify({'message': 'permission accepted!'})
     except:
         return jsonify({'message': 'there has been an error!'}), 500
@@ -928,8 +939,10 @@ def add_new_disc(current_user):
         InterpolationGap=InterpolationGap,
         KnowledgeBasedFile_name=KnowledgeBasedFile_name,
         NumStates=NumStates,
-        PAA=PAA)
+        PAA=PAA,
+        Finished=False)
     db.session.add(disc)
+    db.session.commit()
     # </editor-fold>
 
     # <editor-fold desc="Prepare query for HugoBot">
@@ -973,23 +986,30 @@ def add_new_disc(current_user):
          "symbolic-time-series.csv",
          "KL.txt"]
     if validate_file_creation(disc_path, mandatory_files):
+        disc.Finished = True
         db.session.commit()
         db.session.close()
-        notify_by_email.send_an_email(
-            message=f"Subject: A discretization for Your dataset \"" + dataset_name +
-                    "\" has been successfully created",
-            receiver_email=current_user.Email)
+        try:
+            notify_by_email.send_an_email(
+                message=f"Subject: A discretization for Your dataset \"" + dataset_name +
+                        "\" has been successfully created",
+                receiver_email=current_user.Email)
+        except:
+            return jsonify({'message': 'cannot send email!.'}), 409
         return "success!", 200
     else:
+        db.session.delete(disc)
+        db.session.commit()
         db.session.close()
-        notify_by_email.send_an_email(
-            message=f"Subject: A problem has occurred with the " +
-                    "discretization you queued for Your dataset \"" + dataset_name + "\". Please try again.",
-            receiver_email=current_user.Email)
-        return jsonify({'message': 'a new discretization has been requested, but a problem has occurred.'}), 400
+        try:
+            notify_by_email.send_an_email(
+                message=f"Subject: A problem has occurred with the " +
+                        "discretization you queued for Your dataset \"" + dataset_name + "\". Please try again.",
+                receiver_email=current_user.Email)
+        except:
+            return jsonify({'message': 'cannot send email!.'}), 409
+        return jsonify({'message': 'a new discretization has been requested, but a problem has occurred.'}), 500
     # </editor-fold>
-
-    return "success!"
 
 
 def parse_kl_input(input_path, output_path):
@@ -1134,12 +1154,27 @@ def add_tim(current_user):
         print(epsilon)
         disc = discretization.query.filter_by(id=discretization_id).first()
         email = current_user.Email
+
         if check_exists(disc, epsilon, max_gap, vertical_support, num_relations, index_same, max_tirp_length):
             return jsonify({'message': 'already exists!'}), 409
         dataset_name = get_dataset_name(disc)
         KL_id = str(uuid.uuid4())
         create_directory(dataset_name, discretization_id, KL_id)
         directory_path = dataset_name + "/" + discretization_id
+
+        KL = karma_lego(
+            discretization=disc,
+            epsilon=epsilon,
+            id=KL_id,
+            index_same=index_same,
+            max_gap=max_gap,
+            max_tirp_length=max_tirp_length,
+            min_ver_support=vertical_support,
+            num_relations=num_relations,
+            Finished=False)
+        db.session.add(KL)
+        db.session.commit()
+
         for filename in os.listdir(DATASETS_ROOT + '/' + directory_path):
             if filename.endswith(".txt"):
                 start_time = time.time()
@@ -1185,27 +1220,26 @@ def add_tim(current_user):
         if ((os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + 'KL.txt'))
                 or (os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + 'KL-class-0.0.txt'))
                 or (os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + 'KL-class-1.0.txt'))):
-            KL = karma_lego(
-                discretization=disc,
-                epsilon=epsilon,
-                id=KL_id,
-                index_same=index_same,
-                max_gap=max_gap,
-                max_tirp_length=max_tirp_length,
-                min_ver_support=vertical_support,
-                num_relations=num_relations)
-            db.session.add(KL)
+            KL.Finished = True
             db.session.commit()
-            notify_by_email.send_an_email(
-                message=f"Subject: karmalego successfully created",
-                receiver_email=email)
-            db.session.close()
+            try:
+                notify_by_email.send_an_email(
+                    message=f"Subject: karmalego successfully created",
+                    receiver_email=email)
+                db.session.close()
+            except:
+                return jsonify({'message': 'cannot send email!.'}), 409
             return jsonify({'message': 'karmalego created!', 'KL_id': KL_id}), 200
         else:
+            db.session.delete(KL)
+            db.session.commit()
             db.session.close()
-            notify_by_email.send_an_email(
-                message=f"Subject: problem with creating karmalego",
-                receiver_email=email)
+            try:
+                notify_by_email.send_an_email(
+                    message=f"Subject: problem with creating karmalego",
+                    receiver_email=email)
+            except:
+                return jsonify({'message': 'cannot send email!.'}), 409
             return jsonify({'message': 'did not create karmalego):'}), 409
     except:
         db.session.close()
@@ -1599,14 +1633,14 @@ def get_data_on_dataset(current_user):
         print(current_user)
         if check_for_authorization(current_user, dataset_name):
             return jsonify({'message': 'dont try to fool me, you dont own it!'}), 403
-        discretizations = discretization.query.filter_by(dataset_Name=dataset_name).all()
+        discretizations = discretization.query.filter_by(dataset_Name=dataset_name, Finished=True).all()
         disc_to_return = {}
         x = 0
         num = 0
         disc_to_return["lengthNum"] = len(discretizations)
         karma_arr = []
         for curr_disc in discretizations:
-            karma_arr.append(karma_lego.query.filter_by(discretization=curr_disc).all())
+            karma_arr.append(karma_lego.query.filter_by(discretization=curr_disc, Finished=True).all())
             num = num + len(karma_arr[x])
             disc_to_return[str(x)] = {
                 "BinsNumber": str(curr_disc.NumStates),
