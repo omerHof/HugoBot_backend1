@@ -61,8 +61,11 @@ ABSTRACTION_METHOD_CONVERSION = {
 
 
 # <editor-fold desc="DB ORM">
-# this is the users table
 class Users(db.Model):
+    """
+    This is the Users Table.
+    It is in charge of maintaining data on Users, with the User's Email address as its Primary Key.
+    """
     Email = db.Column(db.String(80), primary_key=True)
     institute = db.Column(db.String(50), nullable=False)
     degree = db.Column(db.String(10), nullable=False)
@@ -74,8 +77,12 @@ class Users(db.Model):
     ask_permissions = db.relationship('ask_permissions', backref='owner', lazy='subquery')
 
 
-# this is the info about the metadata
 class info_about_datasets(db.Model):
+    """
+    This table is in charge of holding metadata on Datasets in the system, with the Dataset's name as its Primary Key.
+    Information such as the Dataset's description or categorization goes here,
+    while the content itself (the actual data etc.) is stored systematically in the "Datasets" folder
+    """
     Name = db.Column(db.String(50), primary_key=True)
     pub_date = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow())
     Description = db.Column(db.String(255))
@@ -91,19 +98,38 @@ class info_about_datasets(db.Model):
     discretization = db.relationship('discretization', backref='dataset', lazy='subquery')
 
 
-# table than handles the permissions
 class Permissions(db.Model):
+    """
+    This table holds all the permissions in the system.
+    It represents a Many-To-Many relationship between the Users table and the info_about_datasets table,
+      with [Email,Dataset_Name] as its Composite Key.
+    The existence of a tuple t such that t.Email = e and t.name_of_dataset = d signifies that e has permission to use d.
+    """
     Email = db.Column(db.String(30), db.ForeignKey('users.Email'), primary_key=True)
     name_of_dataset = db.Column(db.String(50), db.ForeignKey('info_about_datasets.Name'), primary_key=True)
 
 
-# table that handles the permissions that a user wants
 class ask_permissions(db.Model):
+    """
+    This table holds all the permission requests in the system.
+    It represents a Many-To-Many relationship between the Users table and the info_about_datasets table,
+        with [Email,Dataset_Name] as its Composite Key.
+    The existence of a tuple t such that t.Email = e and t.name_of_dataset = d
+        signifies that e has asked for permission to use d.
+    """
     Email = db.Column(db.String(30), db.ForeignKey('users.Email'), primary_key=True)
     name_of_dataset = db.Column(db.String(50), db.ForeignKey('info_about_datasets.Name'), primary_key=True)
 
 
 class discretization(db.Model):
+    """
+    This table holds all the info about the discretizations.
+    Its primary key is a unique Discretization ID.
+    In case we are dealing with a Gradient/Knowledge-based discretization,
+    the files themselves are checked for uniqueness.
+    The files of the discretization itself (states file, KL input file etc.) are stored systematically,
+    in "Datasets/<Dataset Name>/<Disc Id>/".
+    """
     id = db.Column(db.String(150), primary_key=True)
     PAA = db.Column(db.Integer, nullable=False)
     AbMethod = db.Column(db.String(25), nullable=False)
@@ -118,6 +144,11 @@ class discretization(db.Model):
 
 
 class karma_lego(db.Model):
+    """
+    This table holds all the info about the KarmaLego runs.
+    Its primary key is a unique KarmaLego ID
+    The output file(s) is/are stored separately in "Datasets/<Dataset Name>/<Disc Id>/<KL Id>/".
+    """
     id = db.Column(db.String(150), primary_key=True)
     epsilon = db.Column(db.Float)
     min_ver_support = db.Column(db.Float, nullable=False)
@@ -158,6 +189,11 @@ def token_required(f):
 
 
 def empty_string():
+    """
+    This function defines an empty string.
+    It is used as a default fallback in the default dict in the add_new_disc method.
+    :return: an empty string
+    """
     return ""
 
 
@@ -252,6 +288,13 @@ def create_directory(dataset_name, discretization_id, kl_id):
 
 
 def create_disc_zip(disc_path, zip_name, files_to_zip):
+    """
+    This function creates a zipped file from a list of files in a desired directory
+    :param disc_path: the path of the discretization
+    :param zip_name: the name we want the zipped file to have in the end
+    :param files_to_zip: a list of the files we want to include in the zip
+    :return:
+    """
     with zipfile.ZipFile(os.path.join(disc_path, zip_name), mode='w') as zipped_disc:
         for file in files_to_zip:
             file_path = os.path.join(disc_path, file)
@@ -273,10 +316,21 @@ def delete_not_necessary(directory_path):
 
 
 # <editor-fold desc="Users Module">
-# post reqeust that gets a json with 'Email',
-# 'Nickname'(optional), 'Password', 'Lname', 'Fname'
 @app.route('/register', methods=['POST'])
 def create_user():
+    """
+    This route handles registration of a new user in the system
+    :return:
+    400 (BAD REQUEST) if:
+    # the email is not valid
+    # the email already exists
+    # an unexpected error occurred
+
+    409 (CONFLICT) if:
+    # the server cannot send an email
+
+    200 (OK) if everything went good
+    """
     try:
         data = request.form
         if check_email.check(data['Email']):
@@ -314,6 +368,16 @@ def create_user():
 # send with key value like x-access-token in the header
 @app.route('/login', methods=['POST'])
 def login():
+    """
+    This route handles a login attempt of an apparent user to the system
+    :return:
+    400 (BAD REQUEST) if:
+    # one of the fields was left empty
+    # the email is incorrect
+    # the password doesn't match the email
+
+    200 (OK) if everything went good, also returns a token (jwt) that allows a user access to the website
+    """
     # try:
     data = request.form
     if 'Email' not in data or 'Password' not in data:
@@ -343,6 +407,25 @@ def login():
 @app.route('/loadMail', methods=['GET'])
 @token_required
 def load_mail(current_user):
+    """
+    This function loads all of the relevant mail relative to the current user (= the user who sent the request).
+    :param current_user: The currently logged in user.
+    :return:
+    500 (INTERNAL SERVER ERROR) if:
+    # The server experienced an unintended internal error.
+
+    200 (OK) if all went well, the response contains:
+    # myDatasets: A table containing all of the user's datasets.
+    # myDatasetsLen: The length of myDatasets.
+    # tablesToExplore: A table containing every dataset a user can ask permission to use.
+    # tablesToExploreLen: the length of tablesToExplore.
+    # myPermissions: A table of datasets for which the current user has permissions.
+    # myPermissionsLen: the length of myPermissions
+    # askPermissions: A table of datasets for which the current user has requested (but not yet granted) permissions.
+    # askPermissionsLen: the length of askPermissions
+    # approve A table of datasets that the user owns for which certain users have asked permission for.
+    # approveLen: the length of approve
+    """
     try:
         my_datasets = current_user.my_datasets
         to_return = {"myDatasets": {}, "myDatasetsLen": len(my_datasets)}
@@ -441,6 +524,18 @@ def load_mail(current_user):
 @app.route('/askPermission', methods=['GET'])
 @token_required
 def ask_permission(current_user):
+    """
+    This function handles a permission request for a dataset by the current user.
+    :param current_user: The currently logged in user.
+    :return:
+    400 (BAD REQUEST) if:
+    # The server experienced an unintended internal error.
+
+    409 (CONFLICT) if:
+    # An Email about the request could not be sent to the owner.
+
+    200 (OK) if all went well.
+    """
     try:
         dataset_name = request.args.get('dataset')
         dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
@@ -469,6 +564,21 @@ def ask_permission(current_user):
 @app.route('/acceptPermission', methods=['GET'])
 @token_required
 def accept_permission(current_user):
+    """
+    This function handles a permission acceptance for a dataset owned by the current user.
+    :param current_user: The currently logged in user.
+    :return:
+    400 (BAD REQUEST) if:
+    # The current user does not own the dataset he is trying to give permission for.
+
+    409 (CONFLICT) if:
+    # An Email about the acceptance could not be sent to the grantee.
+
+    500 (INTERNAL SERVER ERROR) if:
+    # The server experienced an unintended internal error.
+
+    200 (OK) if all went well.
+    """
     try:
         dataset_name = request.args.get('dataset')
         user_email = request.args.get('userEmail')
@@ -499,6 +609,21 @@ def accept_permission(current_user):
 @app.route('/rejectPermission', methods=['GET'])
 @token_required
 def reject_permission(current_user):
+    """
+    This function handles a permission rejection for a dataset owned by the current user.
+    :param current_user: The currently logged in user.
+    :return:
+    400 (BAD REQUEST) if:
+    # The current user does not own the dataset he is trying to deny permission to.
+
+    409 (CONFLICT) if:
+    # An Email about the rejection could not be sent to the grantee.
+
+    500 (INTERNAL SERVER ERROR) if:
+    # The server experienced an unintended internal error.
+
+    200 (OK) if all went well.
+    """
     try:
         dataset_name = request.args.get('dataset')
         user_email = request.args.get('userEmail')
@@ -526,6 +651,11 @@ def reject_permission(current_user):
 
 # <editor-fold desc="Validations">
 def check_non_negative_int(s):
+    """
+    Validates that the input string represents an integer larger than or equal to 0.
+    :param s: the string we want to check
+    :return: True if it is represents an integer larger than or equal to 0, False otherwise
+    """
     try:
         return int(s) >= 0
     except ValueError:
@@ -533,6 +663,11 @@ def check_non_negative_int(s):
 
 
 def check_int(s):
+    """
+    Validates that the input string represents an integer.
+    :param s: the string we want to check
+    :return: True if it is represents an integer, False otherwise
+    """
     try:
         int(s)
         return True
@@ -541,6 +676,11 @@ def check_int(s):
 
 
 def check_float(s):
+    """
+    Validates that the input string represents an floating point number.
+    :param s: the string we want to check
+    :return: True if it is represents an floating point number, False otherwise
+    """
     try:
         float(s)
         return True
@@ -549,6 +689,11 @@ def check_float(s):
 
 
 def validate_raw_data_header(raw_data_path):
+    """
+    Validates that the header of a user-submitted raw data file adheres to HugoBot's standards.
+    :param raw_data_path: a path to the raw data file
+    :return: True if the header fits the format, False otherwise
+    """
     with open(raw_data_path) as data:
         reader = csv.reader(data, delimiter=',')
         for header in islice(reader, 0, 1):
@@ -566,6 +711,16 @@ def validate_raw_data_header(raw_data_path):
 
 
 def validate_raw_data_body(raw_data_path):
+    """
+    Validates the integrity of the data in the raw data file itself.
+    :param raw_data_path: a path to the raw data file
+    :return: True if every row:
+    # Has a non-negative integer as its 1st element
+    # Has an integer as its 2nd element
+    # Has a non-negative integer as its 3rd element
+    # Has a floating point number as its 4th element
+    False otherwise
+    """
     with open(raw_data_path) as data:
         reader = csv.reader(data, delimiter=',')
         i = 0
@@ -583,6 +738,12 @@ def validate_raw_data_body(raw_data_path):
 
 
 def get_variable_list(data_path, column):
+    """
+    Receives a path to a raw data file and a column and extracts a list of unique values in that column
+    :param data_path: a path to the raw data file
+    :param column: the column which we want to get unique values from
+    :return: a list of all unique value
+    """
     try:
         with open(data_path) as data:
             variable_list = []
@@ -598,6 +759,11 @@ def get_variable_list(data_path, column):
 
 
 def validate_vmap_header(vmap_path):
+    """
+    Validates that the header of a user-submitted variable map file adheres to HugoBot's standards.
+    :param vmap_path: a path to the variable map file
+    :return: True if the header fits one of the formats, False otherwise
+    """
     with open(vmap_path) as vmap:
         reader = csv.reader(vmap, delimiter=',')
         for header in islice(reader, 0, 1):
@@ -620,18 +786,37 @@ def validate_vmap_header(vmap_path):
 
 
 def validate_id_integrity(raw_data_path, vmap_path):
+    """
+    Validates whether or not a user has attended to each and every variable in the raw data file
+     in his submitted variable map file.
+    :param raw_data_path: a path to the raw data file
+    :param vmap_path: a path to the variable map file
+    :return: True if the list of variables match, False otherwise
+    """
     raw_data_variable_list = get_variable_list(raw_data_path, 1)
     vmap_variable_list = get_variable_list(vmap_path, 0)
     return sorted(raw_data_variable_list) == sorted(vmap_variable_list)
 
 
 def validate_entity_id_integrity(raw_data_path, entity_path):
+    """
+    Validates whether or not a user has attended to each and every entity in the raw data file
+     in his submitted entity file.
+    :param raw_data_path: a path to the raw data file
+    :param entity_path: a path to the entity file
+    :return: True if the list of entities match, False otherwise
+    """
     raw_data_entity_list = get_variable_list(raw_data_path, 0)
     entity_list = get_variable_list(entity_path, 0)
     return sorted(raw_data_entity_list) == sorted(entity_list)
 
 
 def validate_gradient_file_header(gradient_file_path):
+    """
+    Validates that the header of a user-submitted gradient discretization file's header adheres to HugoBot's standards.
+    :param gradient_file_path: a path to the gradient file
+    :return: True if the header fits the format, False otherwise
+    """
     with open(gradient_file_path) as gradient_file:
         reader = csv.reader(gradient_file, delimiter=',')
         for header in islice(reader, 0, 1):
@@ -651,6 +836,19 @@ def validate_gradient_file_header(gradient_file_path):
 
 
 def validate_gradient_file_body(gradient_file_path):
+    """
+    Validates that the header of a user-submitted gradient discretization file's body
+    adheres to HugoBot's standards.
+    :param gradient_file_path: a path to the gradient file
+    :return: True if every row:
+    # Has a non-negative integer as its 1st element
+    # Has a non-negative integer as its 2nd element
+    # Has 'gradient' as the 3rd element
+    # Has a non-negative integer as its 4th element
+    # Has a floating point number between -90 and 90 as its 5th element
+    # Has a floating point number between -90 and 90 as its 6th element
+    False otherwise
+    """
     with open(gradient_file_path) as gradient_file:
         reader = csv.reader(gradient_file, delimiter=',')
 
@@ -674,6 +872,13 @@ def validate_gradient_file_body(gradient_file_path):
 
 
 def validate_uniqueness(dataset_path, file_name, path_to_exclude):
+    """
+    Validates a submitted gradient/knowledge-based file hasn't already been submitted to the system.
+    :param dataset_path: The path to the dataset which we want to perform temporal abstraction on.
+    :param file_name: The name of the file we want to verify the uniqueness of (e.g states_kb.csv)
+    :param path_to_exclude: The path to the current file (it's trivial that curr_file = curr_file...)
+    :return: True if the file is unique, False otherwise
+    """
     walker = os.walk(dataset_path)
     existing_discs = [x[1] for x in walker][0]
 
@@ -691,6 +896,12 @@ def validate_uniqueness(dataset_path, file_name, path_to_exclude):
 
 
 def validate_kb_file_header(kb_file_path):
+    """
+    Validates that the header of a user-submitted knowledge-based discretization file's header
+    adheres to HugoBot's standards.
+    :param kb_file_path: a path to the knowledge-based file
+    :return: True if the header fits the format, False otherwise
+    """
     with open(kb_file_path) as kb_file:
         reader = csv.reader(kb_file, delimiter=',')
         for header in islice(reader, 0, 1):
@@ -710,6 +921,19 @@ def validate_kb_file_header(kb_file_path):
 
 
 def validate_kb_file_body(kb_file_path):
+    """
+    Validates that the header of a user-submitted gradient discretization file's body
+    adheres to HugoBot's standards.
+    :param kb_file_path: a path to the knowledge-based file
+    :return: True if every row:
+    # Has a non-negative integer as its 1st element
+    # Has a non-negative integer as its 2nd element
+    # Has 'knowledge-based' as the 3rd element
+    # Has a non-negative integer as its 4th element
+    # Has a floating point number as its 5th element
+    # Has a floating point number as its 6th element
+    False otherwise
+    """
     with open(kb_file_path) as kb_file:
         reader = csv.reader(kb_file, delimiter=',')
 
@@ -733,6 +957,16 @@ def validate_kb_file_body(kb_file_path):
 
 
 def validate_classes_in_raw_data(raw_data_path):
+    """
+    Validates whether or not a given raw data file is divided into classes
+    :param raw_data_path: a path to the raw data file
+    :return: True if for every entity, there exists a row such that:
+    # The entity ID is the first element
+    # The Variable ID is -1
+    # The Timestamp is 0
+    # The class is a non-negative integer
+    False otherwise
+    """
     entity_list = get_variable_list(raw_data_path, 0)
     with open(raw_data_path) as data:
         reader = csv.reader(data, delimiter=',')
@@ -750,6 +984,12 @@ def validate_classes_in_raw_data(raw_data_path):
 
 
 def validate_file_creation(path, list_of_files):
+    """
+    Validates the existence of files in a certain path.
+    :param path: the path that contains all of our files
+    :param list_of_files: a list of files we want to make sure are in the path
+    :return: True if all files exist, False otherwise
+    """
     flag = True
     for file in list_of_files:
         flag &= os.path.exists(os.path.join(path, file))
@@ -777,6 +1017,24 @@ def check_if_not_int_but_0(num):
 @app.route('/addNewDisc', methods=['POST'])
 @token_required
 def add_new_disc(current_user):
+    """
+    This function handles a submission of a new discretization to the system.
+    :param current_user: The user that is currently logged in.
+    :return:
+    400 (BAD REQUEST) if:
+    # One of the user inputs are invalid (empty/incorrect).
+    # The Knowledge-based/Gradient file did not go through the validations successfully (incorrect format/not unique).
+    # The user requested a TD4C discretizations and did so on a dataset with no classes.
+    # The same discretization already exists in the system.
+
+    409 (CONFLICT) if:
+    # The server cannot send an email.
+
+    500 (INTERNAL SERVER ERROR) if:
+    # The discretization system has failed to create the necessary files.
+
+    200 (OK) if all went well
+    """
     # <editor-fold desc="Input tests">
     # retrieve user input from request
     data = request.form
@@ -1013,6 +1271,13 @@ def add_new_disc(current_user):
 
 
 def parse_kl_input(input_path, output_path):
+    """
+    This function performs necessary processing on the KarmaLego input
+    in order for it to be understood by the KLW system.
+    :param input_path: the input path to the file
+    :param output_path: the path to the processed file
+    :return:
+    """
     index = 0
     file = open(input_path, "r+")
     t = open(output_path, "w")
@@ -1052,6 +1317,11 @@ def find_max_and_min(line):
 
 
 def run_hugobot(config):
+    """
+    This function receives a prepared query for hugobot, concatenates it into a CLI-ready string and runs it.
+    :param config: a default dict which contains all the necessary configurations for the HugoBot system.
+    :return:
+    """
     # defaults for every path
     command = ""
     command += "python"  # all paths
@@ -1084,6 +1354,15 @@ def run_hugobot(config):
 @app.route('/getDISC', methods=['POST'])
 @token_required
 def get_disc(current_user):
+    """
+    This function handles a request to download a zip of all the discretization files.
+    :param current_user: The user which is currently logged in.
+    :return:
+    500 (INTERNAL SERVER ERROR) if:
+    # The server cannot find any of the requested files
+
+    200 (OK) if all files have been found, sends a zipped folder of all the HugoBot system's outputs.
+    """
     data = request.form
     disc_id = data["disc_id"]
     disc = discretization.query.filter_by(id=disc_id).first()
@@ -1270,6 +1549,16 @@ def get_tim():
 @app.route("/stepone", methods=["POST"])
 @token_required
 def upload_stepone(current_user):
+    """
+    This function handles an upload of a new dataset.
+    This is the metadata step.
+    :param current_user: The user which is currently logged in.
+    :return:
+    400 (BAD REQUEST) if:
+    # The raw data file failed any of the validations (incorrect format/body).
+
+    200 (OK) if all went well.
+    """
     # try:
     print(current_user)
     # Dataset File: user input
@@ -1353,6 +1642,18 @@ def upload_stepone(current_user):
 @app.route("/steptwo", methods=["POST"])
 @token_required
 def upload_steptwo(current_user):
+    """
+    This function handles an upload of a new dataset.
+    This is the variable map step, where a user submits a custom variable map file.
+    :param current_user: The user which is currently logged in.
+    :return:
+    400 (BAD REQUEST) if:
+    # The submitted variable map file failed any of the validations
+    (incorrect header, not all variable IDs are in the file).
+    # There was an unexpected problem in the server.
+
+    200 (OK) if all went well.
+    """
     try:
         file = request.files['file']
         print(file)
@@ -1387,6 +1688,10 @@ def upload_steptwo(current_user):
 
 @app.route("/getVariableList", methods=["GET"])
 def get_variable_list_request():
+    """
+    This function handles a request for a dataset's variable list
+    :return: A list of all the variables in a certain dataset
+    """
     try:
         dataset_name = request.args.get("dataset_id")
         print(dataset_name)
@@ -1404,6 +1709,17 @@ def get_variable_list_request():
 @app.route("/steptwocreate", methods=['POST'])
 @token_required
 def step_two_create(current_user):
+    """
+    This function handles an upload of a new dataset.
+    This is the variable map step, where a user submits a variable map file he made with the HugoBot UI.
+    :param current_user: The user which is currently logged in.
+    :return:
+    400 (BAD REQUEST) if:
+    # The submitted variable map file failed any of the validations (empty fields, duplicate variable names).
+    # There was an unexpected problem in the server.
+
+    200 (OK) if all went well.
+    """
     try:
         file = request.form['csv']
 
@@ -1443,6 +1759,18 @@ def step_two_create(current_user):
 @app.route("/stepthree", methods=["POST"])
 @token_required
 def upload_stepthree(current_user):
+    """
+    This function handles an upload of a new dataset.
+    This is the entity file step, where a user chooses to submit a custom entity file.
+    :param current_user: The user which is currently logged in.
+    :return:
+    400 (BAD REQUEST) if:
+    # The submitted entity file failed any of the validations
+    (leftmost column is not 'id', not all entity IDs are in the data).
+    # There was an unexpected problem in the server.
+
+    200 (OK) if all went well.
+    """
     try:
         if 'file' in request.files:
             file = request.files['file']
@@ -1486,6 +1814,9 @@ def upload_stepthree(current_user):
 # <editor-fold desc="Visualization Files">
 @app.route("/getRawDataFile", methods=["GET"])
 def get_raw_data_file():
+    """
+    :return: Returns a raw data file with the requested dataset id
+    """
     dataset_name = request.args.get("id")
     print(dataset_name)
     return send_file(DATASETS_ROOT + '/' + dataset_name + '/' + dataset_name + '.csv'), 200
@@ -1493,6 +1824,13 @@ def get_raw_data_file():
 
 @app.route("/getEntitiesFile", methods=["GET"])
 def get_entities_file():
+    """
+    :return:
+    404 (NOT FOUND) if:
+    # The entity file cannot be found.
+
+    200 (OK) if the file exists, Returns an entity file with the requested dataset id
+    """
     try:
         dataset_name = request.args.get("id")
         print(dataset_name)
@@ -1503,6 +1841,13 @@ def get_entities_file():
 
 @app.route("/getStatesFile", methods=["GET"])
 def get_states_file():
+    """
+    :return:
+    404 (NOT FOUND) if:
+    # The states file cannot be found.
+
+    200 (OK) if the file exists, Returns a states file with the requested dataset id and disc id
+    """
     try:
         dataset_name = request.args.get("dataset_id")
         print(dataset_name)
@@ -1516,6 +1861,14 @@ def get_states_file():
 @app.route("/getKLOutput", methods=["GET"])
 def get_kl_file():
     try:
+        """
+        :return:
+        404 (NOT FOUND) if:
+        # No KL output file can be found.
+        
+        200 (OK) if the file can be found, sends a KL output file. 
+        If the 'class' argument is present in the URL, sends the KL output file of the requested class.
+        """
         dataset_name = request.args.get("dataset_id")
         print(dataset_name)
         disc_name = request.args.get("disc_id")
@@ -1540,6 +1893,10 @@ def get_kl_file():
 
 @app.route("/incrementViews", methods=["POST"])
 def increment_views():
+    """
+    Increases the view count of a dataset by 1.
+    :return:
+    """
     dataset_name = request.args.get('dataset_id')
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
     views = dataset.views + 1
@@ -1551,6 +1908,10 @@ def increment_views():
 
 @app.route("/incrementDownload", methods=["POST"])
 def increment_download():
+    """
+    Increases the download count of a dataset by 1.
+    :return:
+    """
     dataset_name = request.args.get('dataset_id')
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
     download = dataset.downloads + 1
@@ -1563,6 +1924,15 @@ def increment_download():
 @app.route('/getUserName', methods=['GET'])
 @token_required
 def get_user_name(current_user):
+    """
+    Returns the current user's username.
+    :param current_user: The user which is currently logged in.
+    :return:
+    403 (FORBIDDEN) if:
+    # The current user cannot get the information.
+
+    200 (OK) if the user has permissions, returns the first name and last name of the user.
+    """
     try:
         name = current_user.FName + " " + current_user.LName
         db.session.close()
@@ -1575,6 +1945,15 @@ def get_user_name(current_user):
 @app.route('/getEmail', methods=['GET'])
 @token_required
 def get_email(current_user):
+    """
+    Returns the current user's email address.
+    :param current_user: The user which is currently logged in.
+    :return:
+    403 (FORBIDDEN) if:
+    # The current user cannot get the information.
+
+    200 (OK) if the user has permissions, returns the email of the user.
+    """
     try:
         email = current_user.Email
         print("get email request, email=" + email)
@@ -1588,6 +1967,16 @@ def get_email(current_user):
 # sends all the info about the data sets
 @app.route('/getAllDataSets', methods=['GET'])
 def get_all_datasets():
+    """
+    Returns info on all datasets in the server.
+    :return:
+    500 (INTERNAL SERVER ERROR) if:
+    # There has been an unexpected server error.
+
+    200 (OK) if all went well, the response contains:
+    # lengthNum: The number of datasets
+    # A table that contains metadata about each dataset in the system.
+    """
     try:
         datasets = info_about_datasets.query.all()
         to_return = {}
@@ -1611,6 +2000,10 @@ def get_all_datasets():
 
 @app.route("/getInfo", methods=["GET"])
 def get_all_info_on_dataset():
+    """
+    Returns all the information on a requested dataset.
+    :return: A JSON object with the info about a dataset.
+    """
     dataset_name = request.args.get("id")
     info = info_about_datasets.query.filter_by(Name=dataset_name).first()
     print(info.Name)
@@ -1683,6 +2076,15 @@ def get_data_on_dataset(current_user):
 @app.route('/getDatasetFiles', methods=['GET'])
 @token_required
 def get_dataset_files(current_user):
+    """
+    This function handles a download request for a dataset's files.
+    :param current_user: The user which is currently logged in.
+    :return:
+    500 (INTERNAL SERVER ERROR) if:
+    # Any of the requested files could not be found in the server.
+
+    200 (OK) if all files exist, returns a zipped folder of all the dataset files.
+    """
     dataset_name = request.args.get('dataset_id')
 
     dataset_path = os.path.join(DATASETS_ROOT, dataset_name)
@@ -1703,6 +2105,14 @@ def get_dataset_files(current_user):
 
 @app.route("/getVMapFile", methods=["GET"])
 def get_vmap_file():
+    """
+    Returns the variable map file of a requested dataset.
+    :return:
+    404 (NOT FOUND) if:
+    # The requested file cannot be found in the server.
+
+    200 (OK) if the file exists, returns the variable map file
+    """
     try:
         dataset_name = request.args.get("id")
         print(dataset_name)
@@ -1713,6 +2123,14 @@ def get_vmap_file():
 
 @app.route("/getExampleFile", methods=["GET"])
 def get_example_file():
+    """
+    Returns a requested example file for what an acceptable user-submitted file should look like.
+    :return:
+    404 (NOT FOUND) if:
+    # The requested file cannot be found in the server.
+
+    200 (OK) if the file exists, returns the requested example file
+    """
     try:
         file_name = request.args.get("file")
         print(file_name)
