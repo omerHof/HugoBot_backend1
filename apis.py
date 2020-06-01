@@ -198,6 +198,7 @@ def empty_string():
 
 
 # <editor-fold desc="DB Utils">
+# This function verifies the authorization of the current user on a given dataset.
 def check_for_authorization(current_user, dataset_name):
     per = Permissions.query.filter_by(name_of_dataset=dataset_name, Email=current_user.Email).first()
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
@@ -210,6 +211,7 @@ def check_for_authorization(current_user, dataset_name):
         return False
 
 
+# This function checks if a KL run already exists in the DB
 def check_exists(disc, epsilon, max_gap, vertical_support, num_relations, index_same, max_tirp_length):
     exists = karma_lego.query.filter_by(
         discretization=disc,
@@ -224,6 +226,7 @@ def check_exists(disc, epsilon, max_gap, vertical_support, num_relations, index_
     return True
 
 
+# This function checks if a discretization run already exists in the DB
 def check_if_already_exists(dataset, paa, ab_method, num_states, interpolation_gap, gradient_file_name,
                             knowledge_based_file_name):
     exists = discretization.query.filter_by(
@@ -239,6 +242,7 @@ def check_if_already_exists(dataset, paa, ab_method, num_states, interpolation_g
     return True
 
 
+# This function verifies whether or not the owner of the current discretization's dataset is the current user.
 def check_for_bad_user_disc(disc, user_id):
     if disc.dataset.owner.Email == user_id:
         return False
@@ -246,6 +250,7 @@ def check_for_bad_user_disc(disc, user_id):
         return True
 
 
+# This function verifies whether or not the owner of the current KL run's dataset is the current user.
 def check_for_bad_user(kl, user_id):
     if kl.discretization.dataset.owner.Email == user_id:
         return False
@@ -255,6 +260,7 @@ def check_for_bad_user(kl, user_id):
 
 
 # <editor-fold desc="File System Utils">
+# This function creates a directory for a discretization inside its parent dataset folder.
 def create_directory_disc(dataset_name, discretization_id):
     path = DATASETS_ROOT + '/' + dataset_name + "/" + discretization_id
     try:
@@ -266,6 +272,7 @@ def create_directory_disc(dataset_name, discretization_id):
     return path
 
 
+# This function creates a directory for a dataset.
 def create_directory_for_dataset(dataset_name):
     try:
         os.mkdir(os.path.join(DATASETS_ROOT, dataset_name))
@@ -276,6 +283,7 @@ def create_directory_for_dataset(dataset_name):
     return dataset_name
 
 
+# This function creates a directory for a KarmaLego run inside its parent discretization folder.
 def create_directory(dataset_name, discretization_id, kl_id):
     path = DATASETS_ROOT + '/' + dataset_name + "/" + discretization_id + "/" + kl_id
     try:
@@ -1397,6 +1405,7 @@ def get_disc(current_user):
 
 
 # <editor-fold desc="Time Intervals Mining Module">
+# This function returns the dataset name for a given discretization.
 def get_dataset_name(disc):
     dataset = disc.dataset
     dataset_name = dataset.Name
@@ -1406,6 +1415,11 @@ def get_dataset_name(disc):
 @app.route('/addTIM', methods=['POST'])
 @token_required
 def add_tim(current_user):
+    """
+    This function handles a new KarmaLego run attempt.
+    :param current_user: The user which is currently logged in.
+    :return:
+    """
     try:
         data = request.form
         if check_if_not_int_but_0(data['Epsilon']):
@@ -1528,6 +1542,10 @@ def add_tim(current_user):
 @app.route('/getTIM', methods=['POST'])
 # @token_required
 def get_tim():
+    """
+    This function handles a download request for one of the KarmaLego output files.
+    :return:
+    """
     try:
         data = request.form
         kl_id = data["kl_id"]
@@ -2021,6 +2039,11 @@ def get_all_info_on_dataset():
 @app.route('/getDataOnDataset', methods=['GET'])
 @token_required
 def get_data_on_dataset(current_user):
+    """
+    This function returns all of the existing discretization and KL runs for a given dataset.
+    :param current_user: The user which is currently logged in.
+    :return:
+    """
     try:
         dataset_name = request.args.get("id")
         print(current_user)
