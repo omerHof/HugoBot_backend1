@@ -1937,6 +1937,7 @@ def upload_stepthree(current_user):
                     entity_id_to_compare = header[0].replace("ï»¿", "")
 
                     if entity_id_to_compare != "id":
+                        # if "id" not in entity_id_to_compare:
                         entities.close()
                         os.remove(entity_path)
                         return jsonify({'message': 'leftmost column of entities file must be \"id\"'}), 400
