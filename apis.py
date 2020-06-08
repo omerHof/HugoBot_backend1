@@ -26,13 +26,14 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 db = SQLAlchemy(app)
 
 # <editor-fold desc="Server Constant Definition">
-SERVER_ROOT = "C:/Users/Raz/PycharmProjects/HugoBotServer"
+SERVER_ROOT = "C://HugoBot/Production/HugoBotServer"
 DATASETS_ROOT = SERVER_ROOT + '/Datasets'
 RAW_DATA_HEADER_FORMAT = ["EntityID", "TemporalPropertyID", "TimeStamp", "TemporalPropertyValue"]
 VMAP_HEADER_FORMAT = ["Variable ID", "Variable Name", "Description"]
 VMAP_HEADER_FORMAT_2 = ["TemporalPropertyID", "TemporalPropertyName", "Description"]
 GRADIENT_HEADER_FORMAT = ["StateID", "TemporalPropertyID", "Method", "BinID", "BinLow", "BinHigh", "BinLowScore"]
-KB_HEADER_FORMAT = ["StateID", "TemporalPropertyID", "Method", "BinID", "BinLow", "BinHigh"]
+KB_HEADER_FORMAT = ["StateID", "TemporalPropertyID", "TemporalPropertyName",
+                    "Method", "BinID", "BinLow", "BinHigh", "BinLowScore", "BinLabel"]
 HUGOBOT_EXECUTABLE_PATH = "HugoBot-beta-release-v1.1.5_03-01-2020/cli.py"
 CLI_PATH = SERVER_ROOT + '/' + HUGOBOT_EXECUTABLE_PATH
 MODE = "temporal-abstraction"
@@ -57,6 +58,8 @@ ABSTRACTION_METHOD_CONVERSION = {
     'TD4C-Entropy-IG': 'td4c-entropy-ig',
     'TD4C-SKL': 'td4c-skl'
 }
+
+
 # </editor-fold>
 
 
@@ -158,6 +161,8 @@ class karma_lego(db.Model):
     index_same = db.Column(db.Boolean, nullable=False)
     Finished = db.Column(db.Boolean, nullable=False)
     discretization_name = db.Column(db.String(150), db.ForeignKey('discretization.id'), nullable=False)
+
+
 # </editor-fold>
 
 
@@ -256,6 +261,8 @@ def check_for_bad_user(kl, user_id):
         return False
     else:
         return True
+
+
 # </editor-fold>
 
 
@@ -320,6 +327,8 @@ def delete_not_necessary(directory_path):
             continue
         else:
             os.remove(filename)
+
+
 # </editor-fold>
 
 
@@ -386,27 +395,29 @@ def login():
 
     200 (OK) if everything went good, also returns a token (jwt) that allows a user access to the website
     """
-    # try:
-    data = request.form
-    if 'Email' not in data or 'Password' not in data:
-        return make_response('you didnt give me Email or Password', 400)
-    user = Users.query.filter_by(Email=data['Email']).first()
-    print(user)
-    if not user:
+    try:
+        data = request.form
+        if 'Email' not in data or 'Password' not in data:
+            return make_response('you didnt give me Email or Password', 400)
+        user = Users.query.filter_by(Email=data['Email']).first()
+        print(user)
+        if not user:
+            db.session.close()
+            return make_response({'message': 'Email is not correct'}, 400)
+        if check_password_hash(user.Password, data['Password']):
+            token = jwt.encode(
+                {'Email': user.Email, 'exp': (datetime.datetime.utcnow() + datetime.timedelta(minutes=3000))},
+                app.config['SECRET_KEY'], algorithm='HS256')
+            db.session.close()
+            return jsonify({'token': token.decode('UTF-8')})
+        else:
+            db.session.close()
+            return jsonify({'message': 'wrong password'}), 400
+    except:
         db.session.close()
-        return make_response({'message': 'Email is not correct'}, 400)
-    if check_password_hash(user.Password, data['Password']):
-        token = jwt.encode(
-            {'Email': user.Email, 'exp': (datetime.datetime.utcnow() + datetime.timedelta(minutes=3000))},
-            app.config['SECRET_KEY'], algorithm='HS256')
-        db.session.close()
-        return jsonify({'token': token.decode('UTF-8')})
-    else:
-        db.session.close()
-        return jsonify({'message': 'wrong password'}), 400
-    # except:
-    #     db.session.close()
-    #     return jsonify({'message': 'problem with data 2'}), 400
+        return jsonify({'message': 'Wrong Email!'}), 400
+
+
 # </editor-fold>
 
 
@@ -654,6 +665,8 @@ def reject_permission(current_user):
         return jsonify({'message': 'permission accepted!'})
     except:
         return jsonify({'message': 'there has been an error!'}), 500
+
+
 # </editor-fold>
 
 
@@ -710,7 +723,7 @@ def validate_raw_data_header(raw_data_path):
             entity_id_to_compare = header[0].replace("ï»¿", "")
 
             if len(header) == len(RAW_DATA_HEADER_FORMAT):
-                if entity_id_to_compare == RAW_DATA_HEADER_FORMAT[0]:
+                if RAW_DATA_HEADER_FORMAT[0] in entity_id_to_compare:
                     if header[1] == RAW_DATA_HEADER_FORMAT[1]:
                         if header[2] == RAW_DATA_HEADER_FORMAT[2]:
                             if header[3] == RAW_DATA_HEADER_FORMAT[3]:
@@ -766,6 +779,29 @@ def get_variable_list(data_path, column):
         return []
 
 
+def get_variable_map(vmap_path):
+    """
+    Receives a path to a variable map file and returns a dictionary that maps each id to its name (both are unique)
+    :param vmap_path: a path to the variable map file
+    :return: a <string,string> dictionary that maps IDs to names
+    """
+    try:
+        with open(vmap_path) as vmap:
+            variable_dic = {}
+            reader = csv.reader(vmap, delimiter=',')
+            i = 0
+            for row in reader:
+                if i == 0:
+                    # ignore header
+                    i = i + 1
+                    continue
+                variable_dic[row[0]] = row[1]
+            vmap.close()
+            return variable_dic
+    except (FileNotFoundError, IOError, PermissionError):
+        return {}
+
+
 def validate_vmap_header(vmap_path):
     """
     Validates that the header of a user-submitted variable map file adheres to HugoBot's standards.
@@ -780,13 +816,13 @@ def validate_vmap_header(vmap_path):
             variable_id_to_compare = header[0].replace("ï»¿", "")
 
             if len(header) == len(VMAP_HEADER_FORMAT):
-                if variable_id_to_compare == VMAP_HEADER_FORMAT[0]:
+                if VMAP_HEADER_FORMAT[0] in variable_id_to_compare:
                     if header[1] == VMAP_HEADER_FORMAT[1]:
                         if header[2] == VMAP_HEADER_FORMAT[2]:
                             return True
 
             if len(header) == len(VMAP_HEADER_FORMAT_2):
-                if variable_id_to_compare == VMAP_HEADER_FORMAT_2[0]:
+                if VMAP_HEADER_FORMAT_2[0] in variable_id_to_compare:
                     if header[1] == VMAP_HEADER_FORMAT_2[1]:
                         if header[2] == VMAP_HEADER_FORMAT_2[2]:
                             return True
@@ -823,7 +859,7 @@ def validate_gradient_file_header(gradient_file_path):
     """
     Validates that the header of a user-submitted gradient discretization file's header adheres to HugoBot's standards.
     :param gradient_file_path: a path to the gradient file
-    :return: True if the header fits the format, False otherwise
+    :return: True if the header fits one of the formats, False otherwise
     """
     with open(gradient_file_path) as gradient_file:
         reader = csv.reader(gradient_file, delimiter=',')
@@ -832,7 +868,7 @@ def validate_gradient_file_header(gradient_file_path):
             # solves a utf-8-bom encoding issue where ï»¿ gets added in the beginning of .csv files.
             state_id_to_compare = header[0].replace("ï»¿", "")
 
-            if len(header) <= 7 and state_id_to_compare == GRADIENT_HEADER_FORMAT[0]:
+            if len(header) <= 7 and GRADIENT_HEADER_FORMAT[0] in state_id_to_compare:
                 if header[1] == GRADIENT_HEADER_FORMAT[1]:
                     if header[2] == GRADIENT_HEADER_FORMAT[2]:
                         if header[3] == GRADIENT_HEADER_FORMAT[3]:
@@ -917,50 +953,129 @@ def validate_kb_file_header(kb_file_path):
             # solves a utf-8-bom encoding issue where ï»¿ gets added in the beginning of .csv files.
             state_id_to_compare = header[0].replace("ï»¿", "")
 
-            if len(header) == 6:
-                if state_id_to_compare == GRADIENT_HEADER_FORMAT[0]:
-                    if header[1] == GRADIENT_HEADER_FORMAT[1]:
-                        if header[2] == GRADIENT_HEADER_FORMAT[2]:
-                            if header[3] == GRADIENT_HEADER_FORMAT[3]:
-                                if header[4] == GRADIENT_HEADER_FORMAT[4]:
-                                    if header[5] == GRADIENT_HEADER_FORMAT[5]:
-                                        return True
+            # StateID, TemporalPropertyID, Method, BinID, BinLow, BinHigh
+            if len(header) == 6 and KB_HEADER_FORMAT[0] in state_id_to_compare and header[1] == KB_HEADER_FORMAT[1] \
+                    and header[2] == KB_HEADER_FORMAT[3] and header[3] == KB_HEADER_FORMAT[4] \
+                    and header[4] == KB_HEADER_FORMAT[5] and header[5] == KB_HEADER_FORMAT[6]:
+                return True
+
+            # StateID, TemporalPropertyID, Method, BinID, BinLow, BinHigh, BinLowScore
+            if len(header) == 7 and KB_HEADER_FORMAT[0] in state_id_to_compare and header[1] == KB_HEADER_FORMAT[1] \
+                    and header[2] == KB_HEADER_FORMAT[3] and header[3] == KB_HEADER_FORMAT[4] \
+                    and header[4] == KB_HEADER_FORMAT[5] and header[5] == KB_HEADER_FORMAT[6] \
+                    and header[6] == KB_HEADER_FORMAT[7]:
+                return True
+
+            # StateID, TemporalPropertyID, Method, BinID, BinLow, BinHigh, BinLowScore, BinLabel
+            if len(header) == 8 and KB_HEADER_FORMAT[0] in state_id_to_compare and header[1] == KB_HEADER_FORMAT[1] \
+                    and header[2] == KB_HEADER_FORMAT[3] and header[3] == KB_HEADER_FORMAT[4] \
+                    and header[4] == KB_HEADER_FORMAT[5] and header[5] == KB_HEADER_FORMAT[6] \
+                    and header[6] == KB_HEADER_FORMAT[7] and header[7] == KB_HEADER_FORMAT[8]:
+                return True
+
+            # StateID, TemporalPropertyID, TemporalPropertyName Method, BinID, BinLow, BinHigh, BinLowScore, BinLabel
+            if len(header) == 9 and KB_HEADER_FORMAT[0] in state_id_to_compare and header[1] == KB_HEADER_FORMAT[1] \
+                    and header[2] == KB_HEADER_FORMAT[2] and header[3] == KB_HEADER_FORMAT[3] \
+                    and header[4] == KB_HEADER_FORMAT[4] and header[5] == KB_HEADER_FORMAT[5] \
+                    and header[6] == KB_HEADER_FORMAT[6] and header[7] == KB_HEADER_FORMAT[7] \
+                    and header[8] == KB_HEADER_FORMAT[8]:
+                return True
+
             return False
 
 
-def validate_kb_file_body(kb_file_path):
+def add_variable_names_to_vmap(kb_file_path, disc_path, vmap):
+    """
+    Receives a knowledge-based file with bin labels and a dictionary of a the variables and modifies the file,
+    such that it contains a column with the corresponding variable names.
+    :param kb_file_path: a path to the knowledge-based file
+    :param disc_path: a path to the discretization folder
+    :param vmap: a <string,string> dictionary that maps a variable ID to its variable name, as defined in the VMap file.
+    :return:
+    """
+    with open(kb_file_path) as original_file:
+        reader = csv.reader(original_file, delimiter=',')
+        with open(os.path.join(disc_path, "states_kb_temp.csv"), 'w', newline='') as new_file:
+            writer = csv.writer(new_file, delimiter=',')
+
+            i = 0
+            for row in reader:
+                if i == 0:
+                    row.insert(2, "TemporalPropertyName")
+                    i = i + 1
+                    continue
+                variable_name = vmap[row[1]]
+                row.insert(2, variable_name)
+                writer.writerow(row)
+                # modify the row to contain the new column
+
+    # Replace the old file
+    os.remove(kb_file_path)
+    os.rename(os.path.join(disc_path, "states_kb_temp.csv"), kb_file_path)
+
+
+def validate_kb_file_body(kb_file_path, disc_path, vmap_path):
     """
     Validates that the header of a user-submitted gradient discretization file's body
     adheres to HugoBot's standards.
     :param kb_file_path: a path to the knowledge-based file
+    :param disc_path: a path to the discretization folder
+    :param vmap_path: a path to the dataset's variable map file (needed for some validation paths)
     :return: True if every row:
     # Has a non-negative integer as its 1st element
     # Has a non-negative integer as its 2nd element
+    # OPTIONAL has a Temporal Property Name as its 3rd element
+        that fits the Name defined in the VMap for the ID in the same row
     # Has 'knowledge-based' as the 3rd element
     # Has a non-negative integer as its 4th element
     # Has a floating point number as its 5th element
     # Has a floating point number as its 6th element
+    # OPTIONAL has a string describing the state as its 8th element
     False otherwise
     """
+    is_labeled = False
+    has_vmap_names = False
     with open(kb_file_path) as kb_file:
         reader = csv.reader(kb_file, delimiter=',')
 
         i = 0
         flag = True
+        vmap = {}
         for row in reader:
             if i == 0:
+                if row[2] == "TemporalPropertyName":
+                    has_vmap_names = True
+                if (len(row) == 8 and row[7] == "BinLabel") or (len(row) == 9 and row[8] == "BinLabel"):
+                    is_labeled = True
+                    vmap = get_variable_map(vmap_path)
                 i = i + 1
                 continue
 
-            flag &= check_non_negative_int(row[0])
-            flag &= check_non_negative_int(row[1])
-            flag &= (row[2] == "knowledge-based")
-            flag &= check_non_negative_int(row[3])
-            flag &= check_float(row[4])
-            flag &= check_float(row[5])
+            j = 0
+
+            flag &= check_non_negative_int(row[j])
+            j = j + 1
+            flag &= check_non_negative_int(row[j])
+            j = j + 1
+
+            if is_labeled and has_vmap_names:
+                # If the file has labels and VMap variables we have to validate the VMap variables
+                flag &= (vmap[row[j - 1]] == row[j])
+                j = j + 1
+
+            flag &= (row[j] == "knowledge-based")
+            j = j + 1
+            flag &= check_non_negative_int(row[j])
+            j = j + 1
+            flag &= (check_float(row[j]) or row[j] == "#NAME?")  # workaround for -inf in excel
+            j = j + 1
+            flag &= check_float(row[j])
+            j = j + 1
 
             i = i + 1
-
+    if is_labeled and not has_vmap_names:
+        # add the variable names ourselves in case there are labels but no variable names
+        add_variable_names_to_vmap(kb_file_path, disc_path, vmap)
     return flag
 
 
@@ -1018,6 +1133,8 @@ def check_if_not_int_but_0(num):
         return False
     else:
         return True
+
+
 # </editor-fold>
 
 
@@ -1152,7 +1269,7 @@ def add_new_disc(current_user):
             os.rmdir(disc_path)
             return jsonify({'message': 'the knowledge-based file you supplied has an incorrect data'}), 400
 
-        if not validate_kb_file_body(kb_path):
+        if not validate_kb_file_body(kb_path, disc_path, vmap_path):
             os.remove(kb_path)
             os.rmdir(disc_path)
             return jsonify({'message': 'the knowledge-based file you supplied has incorrect fields.'}), 400
@@ -1188,8 +1305,8 @@ def add_new_disc(current_user):
         # And a TemporalPropertyValue of either 0 or 1. otherwise a TD4C discretization is not possible
         if "td4c" in ABSTRACTION_METHOD_CONVERSION[AbMethod]:
             if not validate_classes_in_raw_data(os.path.join(dataset_path, dataset_name + ".csv")):
-                return jsonify({'message': 'a TD4C discretization was requested. '
-                                           'However, the data is not classified'}), 400
+                return jsonify({'message': 'TD4C requires classification labeling in the data '
+                                           '(TemporalPropertyID=-1).'}), 400
 
     else:
         NumStates = 0
@@ -1241,7 +1358,7 @@ def add_new_disc(current_user):
             parse_kl_input(kl_input_path, kl_processed_input_path)
 
             os.remove(kl_input_path)
-            os.rename(kl_processed_input_path,kl_input_path)
+            os.rename(kl_processed_input_path, kl_input_path)
     # </editor-fold>
 
     # <editor-fold desc="Validate file creation and add to DB">
@@ -1398,9 +1515,16 @@ def get_disc(current_user):
         states_file_name,
         "symbolic-time-series.csv"]
 
+    if os.path.exists(os.path.join(disc_path, "KL-class-0.0.txt")) and \
+            os.path.exists(os.path.join(disc_path, "KL-class-1.0.txt")):
+        files_to_send.append("KL-class-0.0.txt")
+        files_to_send.append("KL-class-1.0.txt")
+
     create_disc_zip(disc_path, disc_zip_name, files_to_send)
 
     return send_file(os.path.join(disc_path, disc_zip_name))
+
+
 # </editor-fold>
 
 
@@ -1560,6 +1684,8 @@ def get_tim():
     except:
         db.session.close()
         return jsonify({'message': 'there is no such file to download'}), 404
+
+
 # </editor-fold>
 
 
@@ -1825,11 +1951,51 @@ def upload_stepthree(current_user):
         db.session.close()
         return jsonify({'message': 'problem with data'}), 400
     db.session.close()
-    return jsonify({'message': 'Dataset upload done!'}), 200
+    return jsonify({'message': 'Dataset Uploaded successfully!'}), 200
+
+
 # </editor-fold>
 
 
 # <editor-fold desc="Visualization Files">
+@app.route("/checkIfVisualPossible", methods=["GET"])
+def check_if_visual_possible():
+    dataset_name = request.args.get("dataset_name")
+    disc_name = request.args.get("disc_name")
+    kl_name = request.args.get("kl_name")
+    kl_path = os.path.join(DATASETS_ROOT, dataset_name, disc_name, kl_name)
+    try:
+        kl_no_classes = os.path.join(kl_path, "KL.txt")
+        with open(kl_no_classes) as kl:
+            header = kl.readline()
+            second_line = kl.readline()
+            if second_line == "":
+                return jsonify({'message': 'Cannot perform Visualization '
+                                           'as one or more of the KarmaLego outputs contain no TIRPs.'}), 500
+            else:
+                return "OK", 200
+    except FileNotFoundError:
+        try:
+            kl_class_1 = os.path.join(kl_path, "KL-class-1.0.txt")
+            with open(kl_class_1) as kl_1:
+                header = kl_1.readline()
+                second_line_1 = kl_1.readline()
+                if second_line_1 == "":
+                    return jsonify({'message': 'Cannot perform Visualization '
+                                               'as one or more of the KarmaLego outputs contain no TIRPs.'}), 500
+
+            kl_class_0 = os.path.join(kl_path, "KL-class-0.0.txt")
+            with open(kl_class_0) as kl_0:
+                header = kl_0.readline()
+                second_line_0 = kl_0.readline()
+                if second_line_0 == "":
+                    return jsonify({'message': 'Cannot perform Visualization '
+                                               'as one or more of the KarmaLego outputs contain no TIRPs.'}), 500
+            return "OK", 200
+        except FileNotFoundError:
+            return jsonify({'message': 'could not find the KarmaLego outputs'}), 400
+
+
 @app.route("/getRawDataFile", methods=["GET"])
 def get_raw_data_file():
     """
@@ -1883,7 +2049,7 @@ def get_kl_file():
         :return:
         404 (NOT FOUND) if:
         # No KL output file can be found.
-        
+
         200 (OK) if the file can be found, sends a KL output file. 
         If the 'class' argument is present in the URL, sends the KL output file of the requested class.
         """
@@ -1906,6 +2072,8 @@ def get_kl_file():
                          kl_name + '/KL.txt'), 200
     except FileNotFoundError:
         return jsonify({'message': 'the request KarmaLego output file cannot be found.'}), 404
+
+
 # </editor-fold>
 
 
@@ -2164,5 +2332,10 @@ def get_example_file():
         return jsonify({'message': 'the request file cannot be found.'}), 404
 
 
+@app.route("/razTest", methods=["GET"])
+def raz_test():
+    return "hello"
+
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80, threaded=True)
+    app.run(host='0.0.0.0', port=8080, threaded=True)
