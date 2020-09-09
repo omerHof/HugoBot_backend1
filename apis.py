@@ -19,6 +19,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import zipfile
 
+from ofirstudents import TemporalWindowsCreation
+
 app = Flask(__name__)
 CORS(app)
 app.config['SECRET_KEY'] = '5791628bb0b13ce0c676dfde280ba245'
@@ -166,12 +168,16 @@ class karma_lego(db.Model):
 # </editor-fold>
 
 
-# this function checks if the user is connected by checking the token
 def token_required(f):
+    """
+    this function checks if the user is connected by checking the token
+    :param f: the token
+    :return:
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
-
+        # if the token is correct
         if 'x-access-token' in request.headers:
             token = request.headers['x-access-token']
 
@@ -183,6 +189,7 @@ def token_required(f):
         try:
             data = jwt.decode(token, app.config['SECRET_KEY'])
             current_user = Users.query.filter_by(Email=data['Email']).first()
+        #if something went wrong
         except:
             db.session.close()
             print("token invalid. client rejected.")
@@ -203,8 +210,14 @@ def empty_string():
 
 
 # <editor-fold desc="DB Utils">
-# This function verifies the authorization of the current user on a given dataset.
 def check_for_authorization(current_user, dataset_name):
+    """
+    This function verifies the authorization of the current user on a given dataset.
+    she gets the current user by his id and the dataset name
+    :param current_user: the email of the current user
+    :param dataset_name: the name of the dataset
+    :return:
+    """
     per = Permissions.query.filter_by(name_of_dataset=dataset_name, Email=current_user.Email).first()
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
     if dataset.public_private == "Public":
@@ -216,8 +229,17 @@ def check_for_authorization(current_user, dataset_name):
         return False
 
 
-# This function checks if a KL run already exists in the DB
 def check_exists(disc, epsilon, max_gap, vertical_support, num_relations, index_same, max_tirp_length):
+    """
+    This function checks if a KL run already exists in the DB
+    param - epsilon - the value of epsilon, int
+    param - max gap- int, the max_gap between the intervals for creating the index
+    :param min_ver_support: float, the minimum vertical support value
+    :param num_relations: int, number of relations
+    :param index_same: Boolean, index same symbols or not
+    :return:
+    if there is already a kl with that caracteristics
+    """
     exists = karma_lego.query.filter_by(
         discretization=disc,
         epsilon=epsilon,
@@ -231,9 +253,21 @@ def check_exists(disc, epsilon, max_gap, vertical_support, num_relations, index_
     return True
 
 
-# This function checks if a discretization run already exists in the DB
+
 def check_if_already_exists(dataset, paa, ab_method, num_states, interpolation_gap, gradient_file_name,
                             knowledge_based_file_name):
+    """
+    This function checks if a discretization run already exists in the DB
+    :param PAA
+    :param NumStates - the number of states we want to send to discretization, int
+    :param InterpolationGap - the interpolation gap variable we want to send to discretization , float
+    :param AbMethod - the abstruct mathod we want to send to discretization, string
+    :param KnowledgeBasedFile - if there is a knowledge-based file we send it as well, csv file
+    :param GradientFile - if there is a gradiente file we send it as well, csv file
+    :param GradientWindowSize - if there is a gradient file we send its window size, float
+    :return:
+    if there is already a discretization with that caracteristics
+    """
     exists = discretization.query.filter_by(
         AbMethod=ab_method,
         dataset=dataset,
@@ -247,16 +281,29 @@ def check_if_already_exists(dataset, paa, ab_method, num_states, interpolation_g
     return True
 
 
-# This function verifies whether or not the owner of the current discretization's dataset is the current user.
 def check_for_bad_user_disc(disc, user_id):
+    """
+    This function verifies whether or not the owner of the current discretization's dataset is the current user
+    :param disc: discretization id
+    :param user_id: his email
+    :return:
+    wether the user validated or not
+    """
     if disc.dataset.owner.Email == user_id:
         return False
     else:
         return True
 
 
-# This function verifies whether or not the owner of the current KL run's dataset is the current user.
+
 def check_for_bad_user(kl, user_id):
+    """
+    This function verifies whether or not the owner of the current KL run's dataset is the current user.
+    :param kl: the id of the karma lego run
+    :param user_id: the email of the user
+    :return:
+    wether the user validated or not
+    """
     if kl.discretization.dataset.owner.Email == user_id:
         return False
     else:
@@ -267,8 +314,15 @@ def check_for_bad_user(kl, user_id):
 
 
 # <editor-fold desc="File System Utils">
-# This function creates a directory for a discretization inside its parent dataset folder.
+
 def create_directory_disc(dataset_name, discretization_id):
+    """
+    This function creates a directory for a discretization inside its parent dataset folder.
+    :param dataset_name: the name of the dataset
+    :param discretization_id: the id of the discretization
+    :return:
+    the path to the directory we created
+    """
     path = DATASETS_ROOT + '/' + dataset_name + "/" + discretization_id
     try:
         os.mkdir(path)
@@ -279,8 +333,14 @@ def create_directory_disc(dataset_name, discretization_id):
     return path
 
 
-# This function creates a directory for a dataset.
+
 def create_directory_for_dataset(dataset_name):
+    """
+    This function creates a directory for a dataset.
+    :param dataset_name: the name of the dataset, string
+    :return:
+    the name of the dataset
+    """
     try:
         os.mkdir(os.path.join(DATASETS_ROOT, dataset_name))
     except OSError:
@@ -290,8 +350,14 @@ def create_directory_for_dataset(dataset_name):
     return dataset_name
 
 
-# This function creates a directory for a KarmaLego run inside its parent discretization folder.
 def create_directory(dataset_name, discretization_id, kl_id):
+    """
+    This function creates a directory for a KarmaLego run inside its parent discretization folder.
+    :param dataset_name: the name of the datset
+    :param discretization_id: the id of the discretization
+    :param kl_id: the id of the karma lego run
+    :return:
+    """
     path = DATASETS_ROOT + '/' + dataset_name + "/" + discretization_id + "/" + kl_id
     try:
         os.mkdir(path)
@@ -315,12 +381,12 @@ def create_disc_zip(disc_path, zip_name, files_to_zip):
             file_path = os.path.join(disc_path, file)
             zipped_disc.write(file_path, os.path.basename(file_path))
 
-
+# currently not in any use
 def unzip(from_path, to_path, file_name):
     with zipfile.ZipFile(from_path + '/' + file_name, 'r') as zip_ref:
         zip_ref.extractall(to_path)
 
-
+# currently not in any use
 def delete_not_necessary(directory_path):
     for filename in os.listdir(directory_path):
         if filename.endswith(".txt"):
@@ -337,6 +403,12 @@ def delete_not_necessary(directory_path):
 def create_user():
     """
     This route handles registration of a new user in the system
+    :param firstName- the firstname of the user, string
+    :param lastName - the last name of the user, string
+    :param institute - his institue, string
+    :param degree - his degree, string
+    :param - his email, string
+    :param pass - the password that he wants for himself, string
     :return:
     400 (BAD REQUEST) if:
     # the email is not valid
@@ -380,13 +452,35 @@ def create_user():
     db.session.close()
     return jsonify({'message': 'New user created!'})
 
+@app.route('/createTmpWindows', methods=['POST'])
+def createTmpWindows():
+    data = request.form
+    #data['Password']
 
-# gets 'Email' and 'Password' and gives back a token than you should.
-# send with key value like x-access-token in the header
+    datasetName = data['datasetName']
+
+    TemporalWindowsCreation.TemporalWindowsCreation(int(data['observation']),
+                            int(data['predictionPeriod']),
+                            int(data['overlap']),
+                            SERVER_ROOT+ '/Datasets/' +datasetName + '/' +datasetName + '.csv',
+                            SERVER_ROOT + '/Datasets/' + datasetName ,
+                            StudyDesign=data['studyDesign'],
+                            positiveNegativeRatio=(int(data['positiveRatio']), int(data['negativeRatio'])),
+                            casePositive=int(data['positiveWindows']),
+                            caseNegative=int(data['negativeWindowsCase']),
+                            controlNegative=int(data['negativeWindowsControl']))
+
+    return jsonify({'message': 'New user created!'})
+
+
+
 @app.route('/login', methods=['POST'])
 def login():
     """
     This route handles a login attempt of an apparent user to the system
+    send with key value like x-access-token in the header
+    :param: Email - the email of the user, string
+    :param: password: the password of the user
     :return:
     400 (BAD REQUEST) if:
     # one of the fields was left empty
@@ -422,7 +516,6 @@ def login():
 
 
 # <editor-fold desc="Mail Module">
-# brings all the data you need to load the mail
 @app.route('/loadMail', methods=['GET'])
 @token_required
 def load_mail(current_user):
@@ -446,6 +539,7 @@ def load_mail(current_user):
     # approveLen: the length of approve
     """
     try:
+        #loads my datasets
         my_datasets = current_user.my_datasets
         to_return = {"myDatasets": {}, "myDatasetsLen": len(my_datasets)}
         print(str(len(my_datasets)))
@@ -461,6 +555,7 @@ def load_mail(current_user):
                 "Size": str(curr_dataset.size)}
             x = x + 1
         datasets = info_about_datasets.query.all()
+        #loads all the tables we can explore
         to_return["tablesToExplore"] = {}
         x = 0
         for curr_dataset in datasets:
@@ -474,6 +569,7 @@ def load_mail(current_user):
                     "PublicPrivate": curr_dataset.public_private,
                     "Size": str(curr_dataset.size)}
                 x = x + 1
+        # loads all the tables we have permission for
         to_return["tablesToExploreLen"] = x
         users_permissions = Permissions.query.filter_by(Email=current_user.Email).all()
         to_return["myPermissions"] = {}
@@ -491,6 +587,7 @@ def load_mail(current_user):
                 "PublicPrivate": curr_dataset.public_private,
                 "Size": str(curr_dataset.size)}
             x = x + 1
+        # loads all the permissions we want to get
         users_ask_permissions = ask_permissions.query.filter_by(Email=current_user.Email).all()
         to_return["askPermissions"] = {}
         to_return["askPermissionsLen"] = len(users_ask_permissions)
@@ -509,6 +606,7 @@ def load_mail(current_user):
                 "Size": str(curr_dataset.size)}
             x = x + 1
 
+        # laods all the permissions we already got
         ask_me = ask_permissions.query.all()
         to_return["approve"] = {}
         x = 0
@@ -527,9 +625,7 @@ def load_mail(current_user):
                     "Size": str(curr_dataset.size)}
                 counter = counter + 1
                 x = x + 1
-        print(to_return["approve"])
         to_return["approveLen"] = counter
-        print(to_return["tablesToExplore"])
         to_return['Email'] = current_user.Email
         db.session.close()
         return jsonify(to_return)
@@ -546,6 +642,7 @@ def ask_permission(current_user):
     """
     This function handles a permission request for a dataset by the current user.
     :param current_user: The currently logged in user.
+    :param dataset: witch dataset we want permission
     :return:
     400 (BAD REQUEST) if:
     # The server experienced an unintended internal error.
@@ -586,6 +683,8 @@ def accept_permission(current_user):
     """
     This function handles a permission acceptance for a dataset owned by the current user.
     :param current_user: The currently logged in user.
+    param dataset: the name of the dataset to accept, string
+    paran userEmail: the email of the user that we want to accept his permission
     :return:
     400 (BAD REQUEST) if:
     # The current user does not own the dataset he is trying to give permission for.
@@ -631,6 +730,8 @@ def reject_permission(current_user):
     """
     This function handles a permission rejection for a dataset owned by the current user.
     :param current_user: The currently logged in user.
+    param dataset: the name of the dataset to reject, string
+    paran userEmail: the email of the user that we want to reject his permission
     :return:
     400 (BAD REQUEST) if:
     # The current user does not own the dataset he is trying to deny permission to.
@@ -1145,6 +1246,13 @@ def add_new_disc(current_user):
     """
     This function handles a submission of a new discretization to the system.
     :param current_user: The user that is currently logged in.
+    :param PAA
+    :param NumStates - the number of states we want to send to discretization, int
+    :param InterpolationGap - the interpolation gap variable we want to send to discretization , float
+    :param AbMethod - the abstruct mathod we want to send to discretization, string
+    :param KnowledgeBasedFile - if there is a knowledge-based file we send it as well, csv file
+    :param GradientFile - if there is a gradiente file we send it as well, csv file
+    :param GradientWindowSize - if there is a gradient file we send its window size, float
     :return:
     400 (BAD REQUEST) if:
     # One of the user inputs are invalid (empty/incorrect).
@@ -1425,6 +1533,11 @@ def parse_kl_input(input_path, output_path):
 
 
 def find_max_and_min(line):
+    """
+    this is a helper function that finds the min and max values in an array
+    :param line: in witch lins to for
+    :return: the min and max values
+    """
     var_min = sys.maxsize
     var_max = -sys.maxsize
     line_arr = line.split(";")
@@ -1482,6 +1595,7 @@ def get_disc(current_user):
     """
     This function handles a request to download a zip of all the discretization files.
     :param current_user: The user which is currently logged in.
+    param: disc_id: the discretization id that we want to get data on
     :return:
     500 (INTERNAL SERVER ERROR) if:
     # The server cannot find any of the requested files
@@ -1529,8 +1643,14 @@ def get_disc(current_user):
 
 
 # <editor-fold desc="Time Intervals Mining Module">
-# This function returns the dataset name for a given discretization.
+
 def get_dataset_name(disc):
+    """
+    This function returns the dataset name for a given discretization.
+    :param disc: the id of the discretization
+    :return:
+    the name of the dataset related to the discretization
+    """
     dataset = disc.dataset
     dataset_name = dataset.Name
     return dataset_name
@@ -1542,9 +1662,17 @@ def add_tim(current_user):
     """
     This function handles a new KarmaLego run attempt.
     :param current_user: The user which is currently logged in.
+    param - epsilon - the value of epsilon, int
+    param - max gap- int, the max_gap between the intervals for creating the index
+    :param min_ver_support: float, the minimum vertical support value
+    :param num_relations: int, number of relations
+    :param index_same: Boolean, index same symbols or not
     :return:
+    if it was a sussess run it returns status 200
+    if there is already a karma lego like the user wants now it returns status 400
     """
     try:
+        #makes all the validations befor making any write to the database
         data = request.form
         if check_if_not_int_but_0(data['Epsilon']):
             return jsonify({'message': 'you did not give me an integer but a float'}), 404
@@ -1558,6 +1686,7 @@ def add_tim(current_user):
             epsilon = int(0.0000)
         else:
             epsilon = int(data['Epsilon'])
+        #saves all the parameters that the user passed me
         max_gap = int(data['Max Gap'])
         vertical_support = int(data['min_ver_support']) / 100
         num_relations = int(data['num_relations'])
@@ -1571,14 +1700,14 @@ def add_tim(current_user):
         print(epsilon)
         disc = discretization.query.filter_by(id=discretization_id).first()
         email = current_user.Email
-
+        #checking if the current discretization already exists
         if check_exists(disc, epsilon, max_gap, vertical_support, num_relations, index_same, max_tirp_length):
             return jsonify({'message': 'already exists!'}), 409
         dataset_name = get_dataset_name(disc)
         KL_id = str(uuid.uuid4())
         create_directory(dataset_name, discretization_id, KL_id)
         directory_path = dataset_name + "/" + discretization_id
-
+        #saves the data to the dataset
         KL = karma_lego(
             discretization=disc,
             epsilon=epsilon,
@@ -1591,7 +1720,7 @@ def add_tim(current_user):
             Finished=False)
         db.session.add(KL)
         db.session.commit()
-
+        #after creating the directory, creating by karma lego 3 files: kl, kl0, kl1
         for filename in os.listdir(DATASETS_ROOT + '/' + directory_path):
             if filename.endswith(".txt"):
                 start_time = time.time()
@@ -1614,6 +1743,7 @@ def add_tim(current_user):
                 semicolon_end = True
                 skip_followers = False
                 support_vec = vertical_support
+                #calling the actual karma lego algorithem
                 lego_0, karma_0 = RunKarmaLego.runKarmaLego(
                     calc_offsets=calc_offsets,
                     entity_ids_num=entity_ids_num,
@@ -1634,6 +1764,7 @@ def add_tim(current_user):
                     time_intervals_path=path)
             else:
                 continue
+        # checks if the creation of the file of the karma lego was successful and if not it deletes the record from the db
         if ((os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + 'KL.txt'))
                 or (os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + 'KL-class-0.0.txt'))
                 or (os.path.exists(DATASETS_ROOT + '/' + directory_path + '/' + KL_id + '/' + 'KL-class-1.0.txt'))):
@@ -1668,11 +1799,14 @@ def add_tim(current_user):
 def get_tim():
     """
     This function handles a download request for one of the KarmaLego output files.
-    :return:
+    param kl_id: the id of the karma lego that in the db
+    param class_num: the number of the class, could be 0,1,2
+    :return: the file we asks for, like if it is kl, kl0 or kl1
     """
     try:
         data = request.form
         kl_id = data["kl_id"]
+        print(kl_id)
         class_num = data["class_num"]
         KL = karma_lego.query.filter_by(id=kl_id).first()
         # if (check_for_bad_user(KL, current_user.Email)):
@@ -1697,90 +1831,105 @@ def upload_stepone(current_user):
     This function handles an upload of a new dataset.
     This is the metadata step.
     :param current_user: The user which is currently logged in.
+    :param datasetName - the name of the dataset, string
+    :param category - the category of the dataset, string
+    :param publicPrivate - wether it public or private, string
+    :param file - the dataset itself, csv
+    :param description - the description of the dataset, string
+    :param datasetSource - the source of the dataset, string
     :return:
     400 (BAD REQUEST) if:
     # The raw data file failed any of the validations (incorrect format/body).
 
     200 (OK) if all went well.
     """
-    # try:
-    print(current_user)
-    # Dataset File: user input
-    raw_data_file = request.files['file']
+    try:
+        print(current_user)
+        # Dataset File: user input
+        raw_data_file = request.files['file']
 
-    # Now, save the info as a tuple in the DB and the file as part of the file system:
-    # info_about_datasets tuple:
-    # Name (PK), Description, Public/private, Category, Size, Views, Downloads, Email
+        # Now, save the info as a tuple in the DB and the file as part of the file system:
+        # info_about_datasets tuple:
+        # Name (PK), Description, Public/private, Category, Size, Views, Downloads, Email
 
-    # Name: user input
-    dataset_name = request.form['datasetName']
+        # Name: user input
+        dataset_name = request.form['datasetName']
 
-    # Description: user input
-    description = request.form['description']
+        # Description: user input
+        description = request.form['description']
 
-    # Public/private: user input
-    public_private = request.form['publicPrivate']
+        # Public/private: user input
+        public_private = request.form['publicPrivate']
 
-    # Category: user input
-    category = request.form['category']
+        # Category: user input
+        category = request.form['category']
 
-    # source: user input
-    dataset_source = request.form['datasetSource']
+        # source: user input
+        dataset_source = request.form['datasetSource']
 
-    # Views: generated (instantiated to 0)
-    # views = "0"
+        # Views: generated (instantiated to 0)
+        # views = "0"
 
-    # Downloads: generated (instantiated to 0)
-    # downloads = "0"
+        # Downloads: generated (instantiated to 0)
+        # downloads = "0"
 
-    # Email: user input (identifier of the user)
-    # email = "3"
+        # Email: user input (identifier of the user)
+        # email = "3"
 
-    # Validate dataset file integrity
-    # correct format for raw data file:
-    # EntityID	TemporalPropertyID	TimeStamp	TemporalPropertyValue
+        # Validate dataset file integrity
+        # correct format for raw data file:
+        # EntityID	TemporalPropertyID	TimeStamp	TemporalPropertyValue
 
-    # Save the dataset file. in case it does not meet the requirements, delete it.
+        # Save the dataset file. in case it does not meet the requirements, delete it.
 
-    print(dataset_name)
-    create_directory_for_dataset(dataset_name)
+        print(dataset_name)
+        create_directory_for_dataset(dataset_name)
 
-    print(raw_data_file.filename)
+        print(raw_data_file.filename)
 
-    raw_data_file.filename = dataset_name + '.csv'
+        raw_data_file.filename = dataset_name + '.csv'
 
-    raw_data_path = os.path.join(DATASETS_ROOT, dataset_name, secure_filename(raw_data_file.filename))
+        raw_data_path = os.path.join(DATASETS_ROOT, dataset_name, secure_filename(raw_data_file.filename))
 
-    raw_data_file.save(raw_data_path)
+        raw_data_file.save(raw_data_path)
 
-    # Size: generated (calculated from file)
-    size = os.path.getsize(raw_data_path)
-    size = round(size / 1000000, 2)  # B -> MB
+        # Size: generated (calculated from file)
+        size = os.path.getsize(raw_data_path)
+        size = round(size / 1000000, 2)  # B -> MB
 
-    if not validate_raw_data_header(raw_data_path):
-        os.remove(raw_data_path)
-        os.rmdir(os.path.join(DATASETS_ROOT, dataset_name))
-        return jsonify({'message': 'Either your Dataset\'s header is not in the correct format, '
-                                   'or you have more than ' +
-                                   str(len(RAW_DATA_HEADER_FORMAT)) +
-                                   ' columns in your data'}), 400
+        if not validate_raw_data_header(raw_data_path):
+            os.remove(raw_data_path)
+            os.rmdir(os.path.join(DATASETS_ROOT, dataset_name))
+            return jsonify({'message': 'Either your Dataset\'s header is not in the correct format, '
+                                       'or you have more than ' +
+                                       str(len(RAW_DATA_HEADER_FORMAT)) +
+                                       ' columns in your data'}), 400
 
-    if not validate_raw_data_body(raw_data_path):
-        os.remove(raw_data_path)
-        os.rmdir(os.path.join(DATASETS_ROOT, dataset_name))
-        return jsonify({'message': 'at least one row is not in the correct format'}), 400
+        if not validate_raw_data_body(raw_data_path):
+            os.remove(raw_data_path)
+            os.rmdir(os.path.join(DATASETS_ROOT, dataset_name))
+            return jsonify({'message': 'at least one row is not in the correct format'}), 400
 
-    dataset1 = info_about_datasets(Name=dataset_name, Description=description, source=dataset_source,
-                                   public_private=public_private, category=category, size=size, views=0,
-                                   downloads=0, owner=current_user)
-    db.session.add(dataset1)
-    db.session.commit()
+        exists = info_about_datasets.query.filter_by(Name=dataset_name).first()
 
-    # db.session.rollback()
-    # db.session.close()
-    # return jsonify({'message': 'problem with data'}), 400
-    db.session.close()
-    return jsonify({'message': 'Dataset Successfully Validated!'})
+        if exists is None:
+            exists = None
+        else:
+            return jsonify({'message': 'dataset with that name already been created'}), 400
+
+        dataset1 = info_about_datasets(Name=dataset_name, Description=description, source=dataset_source,
+                                       public_private=public_private, category=category, size=size, views=0,
+                                       downloads=0, owner=current_user)
+        db.session.add(dataset1)
+        db.session.commit()
+
+        # db.session.rollback()
+        # db.session.close()
+        # return jsonify({'message': 'problem with data'}), 400
+        db.session.close()
+        return jsonify({'message': 'Dataset Successfully Validated!'})
+    except:
+        return jsonify({'message': 'one of the arguments is missing'}),400
 
 
 @app.route("/steptwo", methods=["POST"])
@@ -1790,6 +1939,8 @@ def upload_steptwo(current_user):
     This function handles an upload of a new dataset.
     This is the variable map step, where a user submits a custom variable map file.
     :param current_user: The user which is currently logged in.
+    :param csv - the csv file that we want to send to the server
+    :param datasetName - the name of the dataset to atach the vmap to
     :return:
     400 (BAD REQUEST) if:
     # The submitted variable map file failed any of the validations
@@ -1834,6 +1985,7 @@ def upload_steptwo(current_user):
 def get_variable_list_request():
     """
     This function handles a request for a dataset's variable list
+    param dataset_id: the id of the dataset
     :return: A list of all the variables in a certain dataset
     """
     try:
@@ -1857,6 +2009,8 @@ def step_two_create(current_user):
     This function handles an upload of a new dataset.
     This is the variable map step, where a user submits a variable map file he made with the HugoBot UI.
     :param current_user: The user which is currently logged in.
+    :param csv - the csv file that we want to send to the server
+    :param datasetName - the name of the dataset to atach the vmap to
     :return:
     400 (BAD REQUEST) if:
     # The submitted variable map file failed any of the validations (empty fields, duplicate variable names).
@@ -1907,6 +2061,8 @@ def upload_stepthree(current_user):
     This function handles an upload of a new dataset.
     This is the entity file step, where a user chooses to submit a custom entity file.
     :param current_user: The user which is currently logged in.
+    :param file - the entities file, csv
+    :param datasetName - the name of the dataset that the entities file belongs to
     :return:
     400 (BAD REQUEST) if:
     # The submitted entity file failed any of the validations
@@ -2027,6 +2183,8 @@ def get_entities_file():
 @app.route("/getStatesFile", methods=["GET"])
 def get_states_file():
     """
+    param dataset_id: the id of the dataset, string
+    param disc_id: the id of the discretization, string
     :return:
     404 (NOT FOUND) if:
     # The states file cannot be found.
@@ -2047,6 +2205,9 @@ def get_states_file():
 def get_kl_file():
     try:
         """
+        param dataset_id: the id of the dataset
+        param disc_id: the id of the discretization
+        param kl_id: the id of the karmalego output
         :return:
         404 (NOT FOUND) if:
         # No KL output file can be found.
@@ -2082,7 +2243,8 @@ def get_kl_file():
 def increment_views():
     """
     Increases the view count of a dataset by 1.
-    :return:
+    :param datset_id: the id of the dataset we want to increament his views, int
+    :return: the new number of views in the database
     """
     dataset_name = request.args.get('dataset_id')
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
@@ -2097,7 +2259,8 @@ def increment_views():
 def increment_download():
     """
     Increases the download count of a dataset by 1.
-    :return:
+    :param datset_id: the id of the dataset we want to increament his downloads
+    :return: the new number of downloads in the database
     """
     dataset_name = request.args.get('dataset_id')
     dataset = info_about_datasets.query.filter_by(Name=dataset_name).first()
@@ -2188,6 +2351,7 @@ def get_all_datasets():
 @app.route("/getInfo", methods=["GET"])
 def get_all_info_on_dataset():
     """
+    param id: the name of the dataset
     Returns all the information on a requested dataset.
     :return: A JSON object with the info about a dataset.
     """
@@ -2211,7 +2375,8 @@ def get_data_on_dataset(current_user):
     """
     This function returns all of the existing discretization and KL runs for a given dataset.
     :param current_user: The user which is currently logged in.
-    :return:
+    param id: the name of the dataset
+    :return:the data on a spesific dataset
     """
     try:
         dataset_name = request.args.get("id")
@@ -2271,6 +2436,7 @@ def get_dataset_files(current_user):
     """
     This function handles a download request for a dataset's files.
     :param current_user: The user which is currently logged in.
+    param dataset_id: the name of the dataset
     :return:
     500 (INTERNAL SERVER ERROR) if:
     # Any of the requested files could not be found in the server.
@@ -2299,6 +2465,7 @@ def get_dataset_files(current_user):
 def get_vmap_file():
     """
     Returns the variable map file of a requested dataset.
+    param id: the name of the dataset
     :return:
     404 (NOT FOUND) if:
     # The requested file cannot be found in the server.
@@ -2317,6 +2484,7 @@ def get_vmap_file():
 def get_example_file():
     """
     Returns a requested example file for what an acceptable user-submitted file should look like.
+    param file: the csv file
     :return:
     404 (NOT FOUND) if:
     # The requested file cannot be found in the server.
@@ -2337,6 +2505,8 @@ def get_example_file():
 def raz_test():
     return "hello"
 
-
+"""
+ower application runs on port 8080 but to the outside world it looks like port 80
+"""
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, threaded=True)
